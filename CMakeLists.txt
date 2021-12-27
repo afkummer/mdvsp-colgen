@@ -14,4 +14,11 @@ include_directories(src)
 add_executable(main
    src/main.cpp
    src/Instance.cpp
+   src/CgMasterGlpk.cpp
+   src/SpfaPricing.cpp
+)
+
+# pkg-config --libs cbc
+target_link_libraries(main 
+   -lglpk
 )

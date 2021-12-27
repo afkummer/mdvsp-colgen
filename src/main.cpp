@@ -1,4 +1,6 @@
 #include "Instance.h"
+#include "CgMasterGlpk.h"
+
 #include <iostream>
 #include <iomanip>
 
@@ -11,20 +13,24 @@ auto main(int argc, char *argv[]) noexcept -> int {
    }
 
    Instance inst{argv[1]};
-   
-   cout << inst.numDepots() << "\t" << inst.numTrips();
-   for (int k = 0; k < inst.numDepots(); ++k) {
-      cout << "\t" << inst.depotCapacity(k);
-   }
-   cout << "\n";
+   CgMasterGlpk master{inst};
 
-   const auto L = inst.numDepots() + inst.numTrips();
-   for (int i = 0; i < L ; ++i) {
-      for (int j = 0; j < L; ++j) {
-         cout << inst.rawCost(i, j) << '\t';
-      }
-      cout << "\n";
-   }
+   master.beginColumn(0);
+   master.addTrip(0);
+   master.addTrip(10);
+   master.commitColumn();
+
+   master.writeLp("master.lp");
+
+   const auto obj = master.solve();
+   cout << "RMP = " << obj << "\n";
+
+   // for (int i = 0; i < inst.numTrips(); ++i)
+   //    cout << "Trip #" << i << " dual: " << master.getTripDual(i) << "\n";
+
+   // for (int k = 0; k < inst.numDepots(); ++k)
+   //    cout << "depot #" << k << " dual: " << master.getDepotCapDual(k) << "\n";
+
 
    return EXIT_SUCCESS;
 }
