@@ -1,0 +1,255 @@
+\documentclass{article}
+
+%
+% Package preamble.
+%
+
+% Allows entering UTF-8 text directly into the document.
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+
+% Improved font rendering on the final PDF.
+% These options only work with PDFLaTeX! For other engines, I recommend
+% disabling the microtype package. In doubt, please check the documentation!
+\usepackage[tracking=true, protrusion=true, expansion, kerning=true]{microtype}
+
+% Packages for mathematical formulations, equations, etc.
+\usepackage{mathtools,amsthm,bm}
+\usepackage{amsmath,amsfonts,amssymb}
+
+% Packages for handling figures and colors.
+\usepackage[dvipsnames]{xcolor}
+\usepackage{graphicx}
+\usepackage{subfig}
+
+% Packages for typesetting tables.
+\usepackage{booktabs,tabularx,longtable}
+\usepackage{makecell,multirow}
+
+% Packages to allow rotating PDF pages.
+\usepackage{pdflscape}
+
+% Packages for typesetting pseudo-code.
+\usepackage[linesnumbered,ruled,lined]{algorithm2e}
+\SetArgSty{textnormal}
+\DontPrintSemicolon
+
+% Miscelaneous packages.
+\usepackage{placeins} % ativa \FloatBarrier
+\usepackage{comment} % Comment environment
+\usepackage[shadow]{todonotes}
+\usepackage{attachfile2} % allows embedding files into the PDF document
+\usepackage{hyperref}
+%\usepackage{showframe}
+
+% Fix PDF 'scroll-to' feature when clicking in a reference within the text.
+\usepackage{hypcap}
+
+%
+% Document preamble
+%
+
+\title{Column Generation Algorithms for the\\Multiple Depot Vehicle Scheduling Problem}
+\author{Alberto Kummer}
+\date{2021}
+
+\hypersetup{
+   colorlinks = true,
+   allcolors = blue
+}
+
+\overfullrule=12pt
+
+\begin{document}
+
+\maketitle
+
+\section{Problem definition}
+
+Let $T$ be a set of timetabled tasks and $K$ the set of available depots in the problem. The Multiple Depot Vehicle Scheduling Problem (MDVSP) consists of assigning each task $i \in T$ to some vehicle of the problem, taking into account the number of vehicles $v_k$ available in each depot $k \in K$. A solution comprises a path for each scheduled vehicle, starting on it origin depot, performing a feasible sequence of tasks, and then returning to its depot at the end. As the depots' capacities are usually large enough, it is allowed--and expected--to some vehicles to remain unscheduled.
+
+The MDVSP is usually defined by terms of a graph $G^k=(A^k, V^k)$ for each depot $k \in K$. In the graph of depot $k \in K$, the set of vertices is given as $V^k = \{o(k), d(k)\} \cup T$, where the elements $o(k)$ and $d(k)$ represent source and sink vertices of the depot, respectively. This way, the set of arcs $A^k \subset V^k \times V^k$. More precisely, $(i,j) \in A^k$ if some of these conditions satisfy.
+
+\begin{itemize}
+   \item If $i = o(k)$ and $j \in T$; represents a \textit{pull-out} arc from depot $k$ to task $j$
+   \item If $j = d(k)$ and $i \in T$; represents a \textit{pull-in} arc from task $i$ to depot $k$
+   \item if $i \neq j \in T$; if a vehicle $k \in K$ can operate task $j$ in sequence of task $i$
+\end{itemize}
+
+As the MDVSP is an optimization problem, a cost $c_{ij}$ is associated to each arc $(i,j) \in A^k, \forall k \in K$. Note that this is a simplification of the cost structure, and the problem considers all vehicles to be equivalent in capacity and operational cost. These definitions are enough to define the MDVSP as the following binary program.
+
+\noindent
+\begin{minipage}{\linewidth}
+\begin{align}
+   \mathrm{Minimize~~~}\sum_{k \in K} \, \sum_{(i,j) \in A^k} c_{ij} x^k_{ij} \label{model:compact-obj}
+\end{align}
+\qquad Subject to:
+\begin{align}
+   & \sum_{k \in K} \,\, \sum_{j:(i,j) \in A^k} x^k_{ij} = 1 & & \forall i \in T \label{model:compact:assignment}\\
+   & \sum_{j : (o(k), j) \in A^k} x^k_{o(k), j} \leqslant v_k & & \forall k \in K \label{model:compact:depot-cap}\\
+   & \sum_{j : (i,j) \in A^k} x^k_{ji} - \sum_{j : (i,j) \in A^k} x^k_{ij} = 0 &
+   \begin{split}
+      & \forall k \in K, \\
+      & i \in V^k \setminus \{o(k), d(k)\}
+   \end{split} \label{model:compact:flow-conserv}\\[4pt]
+   & x^k_{ij} \in \{0, 1\} & & \forall k \in K, (i,j) \in A^k \label{model:compact:domain}
+\end{align}
+\end{minipage}
+
+\vspace*{12pt}
+
+Expression (\ref{model:compact-obj}) defines the objective function we aim to minimize. Constraints (\ref{model:compact:assignment}) ensures that each task has exactly one succeeding vertex among all the vehicles in the problem, which guarantees that such task is assigned exactly once to some vehicle. Constraints (\ref{model:compact:depot-cap}) enforces the number of vehicles available in each depot of the problem. Constraints (\ref{model:compact:flow-conserv}) guarantees the flow conservation of the solution, which establishes the paths for each scheduled vehicles. Finally, constraints (\ref{model:compact:domain}) define the domain of the decision variables.
+
+\section{An equivalent formulation with paths}
+
+The MDVSP allows some alternative formulations regarding the elements that compose the primal solutions of the problem. A notable alternative formulation is the one that represents solutions by means of explicit paths instead of using arcs. Let path $p \in \Omega_k$ an element of all feasible paths of depot $k \in K$. In this context, a feasible path is a necessarily \textit{well-formed} sequence of vertices of $V^k$, starting at $o(k)$, following a feasible sequence of vertices that represent tasks from $T$, and finishing at $d(k)$. This way, the parameter $x_{pij} \in \{0,1\}$ indicates if arc $(i,j) \in A^k$ belongs to the path $p \in \Omega_k$, and we can establish the following relation between the arc-flow and path-flow formulations.
+
+\begin{align}
+   & x^k_{ij} = \sum_{p \in \Omega^k} x_{pij} \theta_p & &  \forall k \in K, (i,j) \in A^k \label{reform:equiv}\\
+   & \sum_{k \in K} \,\,\sum_{j:(i,j) \in A^k} \,\, \sum_{p \in \Omega_k} x_{pij} \theta_p = 1 & & \forall i \in T \label{reform:conv}\\
+   & \theta_p \geqslant 0 & & \forall k \in K, p \in \Omega_k \label{reform:domain}
+\end{align}
+
+To guarantee the formulation equivalence, we need two things. First, we need to link the arc-flow variables $x^k_{ij}$ to the path-flow variables $\theta_p$; And we also need to adapt the assignment constraints (\ref{model:compact:assignment}) by means of these path-flow variables. Constraints (\ref{reform:equiv}) accomplish this first task by defining the arc-flow in terms of a linear combination of the paths which such an arc $(i,j)$ appears. Similarly, the assignment constraints can be written as a linear combination of paths as depicted in (\ref{reform:conv}). In the context of Dantzig-Wolf decomposition for integer problems, these are often referred as \textit{convexity constraints}.
+
+Finally, we can rewrite the model (\ref{model:compact-obj}--\ref{model:compact:domain}) in terms of path-flow formulation by dropping all the flow conservation constraints (\ref{model:compact:flow-conserv}). Next, we replace the constraint (\ref{model:compact:assignment}) by (\ref{reform:equiv}--\ref{reform:domain}). The objective function (\ref{model:compact-obj}), and constraints (\ref{model:compact:depot-cap}) can be easily rewritten by using the equivalence (\ref{reform:equiv}), highlighted in red. All these reformulations lead to the so-called \textit{master problem}.
+
+\noindent
+\begin{minipage}{\linewidth}
+\begin{align}
+   \mathrm{Minimize~~~}\sum_{k \in K} \, \sum_{(i,j) \in A^k} c_{ij} \textcolor{red}{\left(\sum_{p \in \Omega^k} x_{pij} \theta_p \right)} \label{reform2:obj}
+\end{align}
+\begin{align}
+   & \sum_{k \in K} \,\, \sum_{j:(i,j) \in A^k}  \sum_{p \in \Omega_k} x_{pij} \theta_p = 1 & & \forall i \in T  \label{reform2:assign}\\[4pt]
+   & \sum_{j : (i, j) \in A^k} \textcolor{red}{\left( \sum_{p \in \Omega^k} x_{pij} \theta_p \right)} \leqslant v_k &
+   \begin{split}
+      & \forall k \in K, \\
+      & \textcolor{red}{i = o(k)}\\
+   \end{split}  \label{reform2:depot-cap}\\[6pt]
+   & x^k_{ij} = \sum_{p \in \Omega^k} x_{pij} \theta_p & &  \forall k \in K, (i,j) \in A^k  \label{reform2:link-arcs}\\
+   & \theta_p \geqslant 0 & & \forall k \in K, p \in \Omega_k \label{reform2:path-dom}\\
+   & x^k_{ij} \in \{0,1\} & & \forall k \in K, (i,j) \in A^k \label{reform2:x-dom}
+\end{align}
+\end{minipage}
+
+\vspace*{12pt}
+
+The objective function (\ref{reform2:obj}) minimizes the cost of selected paths to compose a solution.  Constraints (\ref{reform2:assign}) guarantees the assignment of each task to exactly one path in the solution. Constraints (\ref{reform2:depot-cap}) enforces the number of vehicles available in each depot of the problem. Constraints (\ref{reform2:link-arcs}) link the arc-flow variables to the path-flow variables. Finally, (\ref{reform2:path-dom}, \ref{reform2:x-dom}) define the domain of the decision variables.
+
+\subsection{Simplifying the path-flow model}
+
+In practice, the parameter $x_{pij}$ is handled implicitly in the implementation of column generation-based algorithms. Thus, we can express the formulation in a more cleaner way by doing some simplifications. The objective function (\ref{reform2:obj}) can be rewritten as in (\ref{reform3:obj}) by doing
+\begin{align}
+   c_p~=~\sum_{(i,j) \in A^k} c_{ij} x_{pij}. \notag
+\end{align}
+Remark that, by definition, all the paths of $\Omega_k$ are \textit{well-formed}. This way, each path $\theta_p \in \Omega_k$ contains exactly one \textit{pull-out} arc departing from depot $k \in K$, and we can rewrite (\ref{reform2:depot-cap}) as in (\ref{reform3:depot-cap}). By the same reason, a vertex $i \in T$ appears at most once, or never appears in path $p \in \Omega_k$. Thus, we so can rewrite (\ref{reform2:assign}) as in (\ref{reform3:assig}) by simplifying
+\begin{align}
+   & a_{ip} = \sum_{j:(i,j) \in A^k} x_{pij} & & \forall i \in T, k \in K, p \in \Omega_k. \notag
+\end{align}
+Naturally, $a_{ip} \in \{0,1\}$. Constraints (\ref{reform2:link-arcs}--\ref{reform2:x-dom}) are the same as (\ref{reform3:link-arcs}--\ref{reform3:x-dom}).
+
+\noindent
+\begin{minipage}{\linewidth}
+\begin{align}
+   \mathrm{Minimize~~~}\sum_{k \in K} \sum_{p \in \Omega^k} c_p \theta_p \label{reform3:obj}
+\end{align}
+\begin{align}
+   & \sum_{k \in K} \sum_{p \in \Omega_k} a_{ip} \theta_p  = 1 & & \forall i \in T \label{reform3:assig}\\[4pt]
+   & \sum_{p \in \Omega^k} \theta_p \leqslant v_k & & \forall k \in K \label{reform3:depot-cap}\\[6pt]
+   & x^k_{ij} = \sum_{p \in \Omega^k} x_{pij} \theta_p & &  \forall k \in K, (i,j) \in A^k \label{reform3:link-arcs}\\
+   & \theta_p \geqslant 0 & & \forall k \in K, p \in \Omega_k \label{reform3:path-dom}\\
+   & x^k_{ij} \in \{0,1\} & & \forall k \in K, (i,j) \in A^k \label{reform3:x-dom}
+\end{align}
+\end{minipage}
+
+\section{Set partitioning formulation for the MDVSP}
+
+Although valid for solving the MDVSP, we introduced the so-called path-flow formulation mainly to introduce the master problem for the reader. In the literature of the problem, the papers normally propose the following \textit{set partitioning} formulation as the master problem for the MDVSP.
+
+\noindent
+\begin{minipage}{\linewidth}
+\begin{align}
+   \mathrm{Minimize~~~} \sum_{k \in K} \sum_{p \in \Omega^k} c_p \theta_p \label{model:sp:obj}
+\end{align}
+\qquad Subject to:
+\begin{align}
+   & \sum_{k \in K} \sum_{p \in \Omega^k} a_{ip} \theta_p = 1 & & \forall i \in T \label{model:sp:assignment}\\
+   & \sum_{p \in \Omega^k}  \theta_p \leqslant v_k & & \forall k \in K \label{model:sp:depot-cap}\\
+   & \theta_p \in \{0, 1\} & & \forall k \in K, p \in \Omega^k \label{model:sp:domain}
+\end{align}
+\end{minipage}
+
+\vspace{12pt}
+
+As the reader may notice, this model is almost the same as (\ref{reform3:obj}--\ref{reform3:x-dom}) with some constraints dropped. By relaxing (\ref{reform3:link-arcs}), the domain constraints (\ref{reform3:x-dom}) were also dropped, and the integer property of the model migrated to variables $\theta_p$. The caveat of this formulation is that--at least from the perspective of mathematical programming, it became impossible to recover the path structure from the solution. In practice, the structure of the paths is stored elsewhere in the implementation so this problem can be easily mitigated. Furthermore, this simpler model is much smaller both in number of constraints and variables, so it requires less memory and (hopefully) less processing power to be solved.
+
+Back to the context of column generation, our main objective is to solve the problem more efficiently. The compact formulation (\ref{model:compact-obj}--\ref{model:compact:domain}) usually applies to very small problems with up to 500 tasks. In practice, instances of MDVSP are huge and comprise hundreds to thousands of tasks, and dozen of depots. The size of the problems affects even more the master formulation, leading to a prohibitively large set $\Omega_k$ that is impossible to enumerate explicitly. The ``trick'' there is that we can enumerate the set of feasible paths in an \textit{on-demand} fashion, taking advantage of the properties of linear programming for such. For that, we first relax the domain constraints (\ref{model:sp:domain}) as $\theta_p \geqslant 0$, which leads to the so-called \textit{relaxed master problem} (RMP). Secondly, we create an almost-empty RMP comprising only an \textit{artificial set of expensive columns}. These initial columns have a very high cost associated, and their solely purpose is to satisfy the assignment constraints (\ref{model:sp:assignment}). Thus, we have as many of these columns as assignment constraints in the RMP. A couple of new names appear here: this very small RMP is called \textit{restricted relaxed master problem} (RRMP); And the strategy of initializing the RRMP with these artificial columns is called as the big-\textit{M} strategy.
+
+In addition to the RRMP, we need some ``external procedure''
+% that can use the dual information associated to the RRMP to enumerate new promising paths.
+to enumerate the set of feasible paths \textit{on-demand}. In the context of the MDVSP, this external procedure consists of finding a path within the network problem associated to each depot, using for that a modified cost structure. If a promising new path could be generated, we then insert it into the RRMP and the process repeats. Recall the dual values associated with the constraints from the RMP. According to the duality of the linear programming, the RMP has a dual solution defined according the values, say $\pi_i$ and $\beta_k$, associated with constraints (\ref{model:compact:assignment}) and (\ref{model:compact:depot-cap}), respectively. These values are used to modify the cost of the decision variables in the underlying network flow subproblems as follows.
+\begin{align}
+   \hat{c}^{\,k}_{ij} =
+   \begin{cases}
+      c_{ij} - \beta_k & \forall (i,j) \in A^k : i = o(k)\\
+      c_{ij} - \pi_i & \forall (i,j) \in A^k : i \in T.
+   \end{cases}
+\end{align}
+If we could find a new path using this modified cost structure, then
+\begin{align}
+   \bar{c}_p = \sum_{(i,j) \in A^k} \hat{c}^k_{ij}
+\end{align}
+defines the \textit{negative reduced cost} associated with this new path. Thus, our objective is to find the path the most negative reduced cost--which is also the path that most improves the primal solution of the RRMP. This way, for each depot $k \in K$, we define the shortest path problem below.
+
+\noindent
+\begin{minipage}{\linewidth}
+   \begin{align}
+      \mathrm{Minimize~}\sum_{(i,j) \in A^k} \bar{c}^{\,k}_{ij} x^k_{ij} \label{model:pricing:obj}
+   \end{align}
+   \qquad Subject to:
+   \begin{align}
+      & \sum_{j : (i,j) \in A^k} x^k_{ji} - \sum_{j : (i,j) \in A^k} x^k_{ij} = 0 &
+      \begin{split}
+         & \forall k \in K, \\
+         & i \in V^k \setminus \{o(k), d(k)\}
+      \end{split} \label{model:pricing:flow-conserv}\\[4pt]
+      & x^k_{ij} \in \{0, 1\} & & \forall k \in K, (i,j) \in A^k \label{model:pricing:domain}
+   \end{align}
+\end{minipage}
+
+\vspace{12pt}
+
+Having the RRMP and some algorithm to solve the subproblems on hand, we can then apply the following iterative algorithm to find the optimal solution for the RRMP.
+
+\begin{algorithm}
+   \KwIn{Set $K$, and their associated graphs $G^k$}
+   \KwOut{Value associated with the optimal RRMP}
+   $\mathit{RRMP} \gets \mathtt{CreateMasterProblem()}$\;
+   $\mathit{SP} \gets \mathtt{CreatePricingSubproblems}()$\;
+   $\mathtt{GenerateInitialSolution}(\mathit{RRMP})$\;
+   $\mathit{newCols} \gets \mathtt{false}$\;
+   \Repeat{$\mathit{newCols} = \mathtt{false}$} {
+      $z = \mathtt{SolveMasterProblem}(\mathit{RRMP})$\;
+      $(\pi, \beta) = \mathtt{GetDualValues}(\mathit{RRMP})$\;
+      $\mathit{newCols} \gets \mathtt{false}$\;
+      \ForEach{$k \in K$} {
+         $\mathtt{UpdateObjectiveFunction}(\mathit{SP}_k)$\;
+         $r \gets \mathtt{SolvePricingSubproblem}(\mathit{SP}_k)$\;
+         \If{$r \leqslant -0.001$}{
+            $\mathit{newCols} \gets \mathtt{true}$\;
+            $\theta \gets \mathtt{ExtractPath}(\mathit{SP}_k)$\;
+            $\mathtt{InsertColumn}(\mathit{RRMP}, \theta)$\;
+         }
+      }
+   }
+   \Return{$z$}
+   \caption{Overview of a simple column generation procedure.}
+\end{algorithm}
+
+The algorithm starts by creating the RRMP and the pricing subproblem (lines 1 and 2, respectively). Line 3 calls the procedure that generates the artificial initial set of columns, as aforementioned. Line 4 initializes the flag that indicates if a new path could be generated in the last iteration of the algorithm. The procedure then loops between lines 5 to 18, until no new path could be generated. Line 6 solves the current RRMP, and line 7 then extract the dual multipliers associated to the primal solution of the model. The algorithm flags that no new path was generated so far (line 8). Lines 9--16 loop through each subproblem associated with the depots, updating their respective cost structures (line 10), and solving their associated shortest path problems (line 11). If a new path with negative reduced cost could be found (line 12), then it flags that a new column was generated (line 13), the new path is extracted from the subproblem (line 14) to be inserted into the RRMP as a new column (line 15). Line 19 then returns the optimal value associated to the RRMP.
+
+Column generation procedures allows some freedom regarding its implementation. A very simple modification consists of moving the lines 6 and 7 to inside of the loop of line 9. This way, each time a pricing is solved, it already considers the most up-to-dated dual information from the RRMP. This modification can be interesting in scenarios which solving the RRMP is not very hard, and when there is some ``redundancy'' of columns generated for different pricing subproblems--i.e., when a path returned by subproblem $k'$ is also a valid path to subproblem $k''$, which is the case of the MDVSP. Another interesting variation of such algorithm consists of returning \textit{multiple paths} in a single call to \texttt{SolvePricingSubproblem}, which can potentially speedup the algorithm but also may cause cycling problems when not properly implemented. A final word regarding algorithmic variants is the following: the best approach varies from problem to problem (sometimes also according the instance), and the best-performing variant could only be determined through experimentation.
+
+
+
+\end{document}
