@@ -5,6 +5,9 @@
 
 #include <boost/multi_array.hpp>
 
+// Handles CTRL+C
+extern volatile bool MdvspSigInt;
+
 /**
  * @brief Class representing a instance of a MDVSP problem.
  */
@@ -33,6 +36,12 @@ public:
    /// too many branches/ifs.
    auto rawCost(int i, int j) const noexcept -> int;
 
+   // Returns a list of adjacent tasks that can succeed task `pred`.
+   // The pairs store the successor task id (first), and the
+   // associated deadheading cost (second.)
+   auto deadheadSuccAdj(int pred) const noexcept -> const std::vector<std::pair<int, int>> &;
+   auto deadheadPredAdj(int pred) const noexcept -> const std::vector<std::pair<int, int>> &;
+
 private:
    const std::string m_fname;
    int m_numDepots, m_numTrips;
@@ -42,4 +51,12 @@ private:
    
    // [origin][dest] -> cost relative to arc (origin,dest)
    boost::multi_array<int, 2> m_matrix;
+
+   // Cache of deadheading portion of the matrix.
+   // [pred task] -> list of successors
+   // <0> -> succeeding task
+   // <1> -> associated cost
+   std::vector<std::vector<std::pair<int, int>>> m_dhCacheSucc;
+
+   std::vector<std::vector<std::pair<int, int>>> m_dhCachePred;
 };

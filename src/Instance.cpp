@@ -30,6 +30,24 @@ Instance::Instance(const char *fname): m_fname{fname} {
          fid >> m_matrix[i][j];
       }
    }
+
+   // Prepares the deadheading cache.
+   m_dhCacheSucc.resize(numTrips());
+   m_dhCachePred.resize(numTrips());
+   for (int i = 0; i < numTrips(); ++i) {
+      auto &vecSucc = m_dhCacheSucc[i];
+      auto &vecPred = m_dhCachePred[i];
+      for (int j = 0; j < numTrips(); ++j) {
+         if (auto cost = deadheadCost(i, j); cost != -1) {
+            vecSucc.emplace_back(make_pair(j, cost));
+         }
+         if (auto cost = deadheadCost(j, i); cost != -1) {
+            vecPred.emplace_back(make_pair(j, cost));
+         }
+      }
+      vecSucc.shrink_to_fit();
+      vecPred.shrink_to_fit();
+   }
 }
 
 Instance::~Instance() {
@@ -45,6 +63,7 @@ auto Instance::numDepots() const noexcept -> int {
 }
 
 auto Instance::numTrips() const noexcept -> int {
+   // return 200;
    return m_numTrips;
 }
 
@@ -56,13 +75,13 @@ auto Instance::depotCapacity(int k) const noexcept -> int {
 auto Instance::sourceCost(int k, int trip) const noexcept -> int {
    assert(k >= 0 && k < m_numDepots);
    assert(trip >= 0 && trip < m_numTrips);
-   return m_matrix[k][trip];
+   return m_matrix[k][trip + m_numDepots];
 }
 
 auto Instance::sinkCost(int k, int trip) const noexcept -> int {
    assert(k >= 0 && k < m_numDepots);
    assert(trip >= 0 && trip < m_numTrips);
-   return m_matrix[trip][k];
+   return m_matrix[trip + m_numDepots][k];
 }
 
 auto Instance::deadheadCost(int pred, int succ) const noexcept -> int {
@@ -75,4 +94,14 @@ auto Instance::rawCost(int i, int j) const noexcept -> int {
    assert(i >= 0 && i < m_numDepots + m_numTrips);
    assert(j >= 0 && j < m_numDepots + m_numTrips);
    return m_matrix[i][j];
+}
+
+auto Instance::deadheadSuccAdj(int pred) const noexcept -> const std::vector<std::pair<int, int>> & {
+   assert(pred >= 0 && pred < m_numTrips);
+   return m_dhCacheSucc[pred];
+}
+
+auto Instance::deadheadPredAdj(int succ) const noexcept -> const std::vector<std::pair<int, int>> & {
+   assert(succ >= 0 && succ < m_numTrips);
+   return m_dhCachePred[succ];
 }
