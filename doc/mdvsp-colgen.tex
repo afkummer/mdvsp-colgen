@@ -187,24 +187,24 @@ Back to the context of column generation, our main objective is to solve the pro
 
 In addition to the RRMP, we need some ``external procedure''
 % that can use the dual information associated to the RRMP to enumerate new promising paths.
-to enumerate the set of feasible paths \textit{on-demand}. In the context of the MDVSP, this external procedure consists of finding a path within the network problem associated to each depot, using for that a modified cost structure. If a promising new path could be generated, we then insert it into the RRMP and the process repeats. Recall the dual values associated with the constraints from the RMP. According to the duality of the linear programming, the RMP has a dual solution defined according the values, say $\pi_i$ and $\beta_k$, associated with constraints (\ref{model:compact:assignment}) and (\ref{model:compact:depot-cap}), respectively. These values are used to modify the cost of the decision variables in the underlying network flow subproblems as follows.
+to enumerate the set of feasible paths \textit{on-demand}. In the context of the MDVSP, this external procedure consists of finding a path within the network problem associated to each depot, using for that a modified cost structure. If a promising new path could be generated, we then insert it into the RRMP and the process repeats. Recall the dual values associated with the constraints from the RMP. According to the duality of the linear programming, the RMP has a dual solution defined according the values, say $\pi_i$ and $\beta_k$, associated with constraints (\ref{model:compact:assignment}) and (\ref{model:compact:depot-cap}), respectively. These values are used to modify the cost of the decision variables in the underlying network flow subproblems as follows. In the MDVSP, $m_i = 1$ because the multipliers of $\theta_p$ in (\ref{model:sp:assignment}) are $1$. $n_k = 1$ for the same reason, according to the multipliers of (\ref{model:sp:depot-cap}).
 \begin{align}
-   \hat{c}^{\,k}_{ij} =
+   \hat{c}^k_{ij} =
    \begin{cases}
-      c_{ij} - \beta_k & \forall (i,j) \in A^k : i = o(k)\\
-      c_{ij} - \pi_i & \forall (i,j) \in A^k : i \in T.
+      c_{ij} - n_k\beta_k & \forall (i,j) \in A^k : i = o(k)\\
+      c_{ij} - m_i\pi_i & \forall (i,j) \in A^k : i \in T.
    \end{cases}
 \end{align}
 If we could find a new path using this modified cost structure, then
 \begin{align}
    \bar{c}_p = \sum_{(i,j) \in A^k} \hat{c}^k_{ij}
 \end{align}
-defines the \textit{negative reduced cost} associated with this new path. Thus, our objective is to find the path the most negative reduced cost--which is also the path that most improves the primal solution of the RRMP. This way, for each depot $k \in K$, we define the shortest path problem below.
+defines the \textit{negative reduced cost} associated with this new path $p$. Thus, our objective is to find the path the most negative reduced cost--which is also the path that most improves the primal solution of the RRMP. This way, for each depot $k \in K$, we define the shortest path problem below.
 
 \noindent
 \begin{minipage}{\linewidth}
    \begin{align}
-      \mathrm{Minimize~}\sum_{(i,j) \in A^k} \bar{c}^{\,k}_{ij} x^k_{ij} \label{model:pricing:obj}
+      \mathrm{Minimize~}\sum_{(i,j) \in A^k} \hat{c}^k_{ij} x^k_{ij} \label{model:pricing:obj}
    \end{align}
    \qquad Subject to:
    \begin{align}
@@ -248,7 +248,7 @@ Having the RRMP and some algorithm to solve the subproblems on hand, we can then
 
 The algorithm starts by creating the RRMP and the pricing subproblem (lines 1 and 2, respectively). Line 3 calls the procedure that generates the artificial initial set of columns, as aforementioned. Line 4 initializes the flag that indicates if a new path could be generated in the last iteration of the algorithm. The procedure then loops between lines 5 to 18, until no new path could be generated. Line 6 solves the current RRMP, and line 7 then extract the dual multipliers associated to the primal solution of the model. The algorithm flags that no new path was generated so far (line 8). Lines 9--16 loop through each subproblem associated with the depots, updating their respective cost structures (line 10), and solving their associated shortest path problems (line 11). If a new path with negative reduced cost could be found (line 12), then it flags that a new column was generated (line 13), the new path is extracted from the subproblem (line 14) to be inserted into the RRMP as a new column (line 15). Line 19 then returns the optimal value associated to the RRMP.
 
-Column generation procedures allows some freedom regarding its implementation. A very simple modification consists of moving the lines 6 and 7 to inside of the loop of line 9. This way, each time a pricing is solved, it already considers the most up-to-dated dual information from the RRMP. This modification can be interesting in scenarios which solving the RRMP is not very hard, and when there is some ``redundancy'' of columns generated for different pricing subproblems--i.e., when a path returned by subproblem $k'$ is also a valid path to subproblem $k''$, which is the case of the MDVSP. Another interesting variation of such algorithm consists of returning \textit{multiple paths} in a single call to \texttt{SolvePricingSubproblem}, which can potentially speedup the algorithm but also may cause cycling problems when not properly implemented. A final word regarding algorithmic variants is the following: the best approach varies from problem to problem (sometimes also according the instance), and the best-performing variant could only be determined through experimentation.
+Column generation procedures allows some freedom regarding its implementation. A very simple modification consists of moving the operations of lines 6 and 7 to inside of the loop of line 9. This way, each time a pricing is solved, it already considers the most up-to-dated dual information from the RRMP. This modification can be interesting in scenarios which solving the RRMP is not very hard, and when there is some ``redundancy'' of columns generated for different pricing subproblems--i.e., when a path returned by subproblem $k'$ is also a valid path to subproblem $k''$, which is the case of the MDVSP. Another interesting variation of such algorithm consists of returning \textit{multiple paths} in a single call to \texttt{SolvePricingSubproblem}, which can potentially speedup the algorithm but also may cause cycling problems when not properly implemented. A final word regarding algorithmic variants is the following: the best approach varies from problem to problem (sometimes also according the instance), and the best-performing variant could only be determined through experimentation.
 
 
 
