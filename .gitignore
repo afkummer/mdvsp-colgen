@@ -1,1 +1,15 @@
 build/*
+
+# Prevent versioning of temporary files.
+doc/mdvsp-colgen.pdf
+*.synctex.gz
+*.lof
+*.atfi
+*.lot
+*.tdo
+*.upa
+*.loa
+*.idx
+*.ilg
+*.ind
+

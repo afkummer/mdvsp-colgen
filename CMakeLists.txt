@@ -7,18 +7,70 @@ add_definitions(
    -Wextra 
    -std=c++17
    -ggdb3
+   -fopenmp
+   -Wno-deprecated-copy
+   -Wno-deprecated-declarations
 )
 
 include_directories(src)
 
-add_executable(main
-   src/main.cpp
-   src/Instance.cpp
-   src/CgMasterGlpk.cpp
-   src/SpfaPricing.cpp
+set(CPLEX_PREFIX /home/alberto/.local/ibm/ILOG/CPLEX_Studio201/)
+include_directories(
+   ${CPLEX_PREFIX}/cplex/include 
+   ${CPLEX_PREFIX}/concert/include
+)
+link_directories(
+   ${CPLEX_PREFIX}/cplex/lib/x86-64_linux/static_pic 
+   ${CPLEX_PREFIX}/concert/lib/x86-64_linux/static_pic
 )
 
-# pkg-config --libs cbc
-target_link_libraries(main 
+add_executable(main
+   # Common implementation
+   src/main.cpp
+   src/Instance.cpp
+   
+   # Compact formulation with Coin-OR CBC
+   src/ModelCbc.cpp
+
+   # Implementations of the master problem
+   # src/CgMasterGlpk.cpp
+   src/colgen/CgMasterCplex.cpp
+
+   # Implementation of pricing algorithms.
+   # src/SpfaPricing.cpp
+   # src/PricingGlpk.cpp
+   # src/PricingCbc.cpp   
+   src/colgen/PricingCplex.cpp
+)
+
+target_link_libraries(main
+   # GLPK dependencies
    -lglpk
+
+   # Coin-OR CBC dependencies
+   -lCbcSolver 
+   -lCbc 
+   -lpthread 
+   -lrt 
+   -lCgl 
+   -lOsiClp 
+   -lClpSolver 
+   -lClp 
+   -lOsi 
+   -lCoinUtils 
+   -lbz2 
+   -lz 
+   -llapack 
+   -lblas 
+   -lm
+
+   # OpenMP support library
+   -lgomp
+
+   # IBM CPLEX dependencies   
+   -pthread
+   -lilocplex
+   -lconcert
+   -lcplex   
+   -ldl
 )
