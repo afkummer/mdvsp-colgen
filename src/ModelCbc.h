@@ -12,6 +12,8 @@ public:
 
    auto writeLp(const char *fname) const noexcept -> void;
 
+   auto changeBounds(int k, int i, int j, double lb = 0.0, double ub = 1.0) noexcept -> void;
+
 private:
    const Instance *m_inst;
    

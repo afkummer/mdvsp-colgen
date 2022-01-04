@@ -19,25 +19,26 @@ PricingCplex::PricingCplex(const Instance &inst, CgMasterInterface &master, int 
    for (int i = 0; i < N; ++i)
       m_x[i] = IloNumVarArray(m_env, N);
 
+   const auto VarTy = IloNumVar::Float;
    for (int i = 0; i < m_inst->numTrips(); ++i) {
       // Creates source arcs.
       if (auto cost = m_inst->sourceCost(m_depotId, i); cost != -1) {
          snprintf(buf, sizeof buf, "source#%d#%d", m_depotId, i);
-         m_x[O][i] = IloNumVar(m_env, 0.0, 1.0, IloNumVar::Bool, buf);
+         m_x[O][i] = IloNumVar(m_env, 0.0, 1.0, VarTy, buf);
          expr += cost * m_x[O][i];
       }
 
       // Creates sink arcs.
       if (auto cost = m_inst->sinkCost(m_depotId, i); cost != -1) {
          snprintf(buf, sizeof buf, "sink#%d#%d", m_depotId, i);
-         m_x[i][D] = IloNumVar(m_env, 0.0, 1.0, IloNumVar::Bool, buf);
+         m_x[i][D] = IloNumVar(m_env, 0.0, 1.0, VarTy, buf);
          expr += cost * m_x[i][D];
       }
 
       // Adds all deadheading arcs.
       for (auto &p: m_inst->deadheadSuccAdj(i)) {
          snprintf(buf, sizeof buf, "deadhead#%d#%d", i, p.first);
-         m_x[i][p.first] = IloNumVar(m_env, 0.0, 1.0, IloNumVar::Bool, buf);
+         m_x[i][p.first] = IloNumVar(m_env, 0.0, 1.0, VarTy, buf);
          expr += p.second * m_x[i][p.first];
       }
    }
@@ -81,7 +82,7 @@ PricingCplex::PricingCplex(const Instance &inst, CgMasterInterface &master, int 
       }
 
       snprintf(buf, sizeof buf, "single_path#%d", m_depotId);
-      IloConstraint c = expr <= 1;
+      IloConstraint c = expr <= 5;
       c.setName(buf);
       m_model.add(c);
       expr.clear();
@@ -144,11 +145,16 @@ auto PricingCplex::solve() noexcept -> double {
    return m_cplex.getObjValue();
 }
 
+auto PricingCplex::getObjValue() const noexcept -> double {
+   return m_cplex.getObjValue();
+}
+
 auto PricingCplex::generateColumns() const noexcept -> void {
    const auto N = m_inst->numTrips() + 2;
    const auto O = N - 2;
    const auto D = N - 1;
 
+#if 0
    // Very simple approach to generate columns.
    // If more than a single path exists in the solution and they crosspasses,
    // then this algorithm does not guarantee anything about the sequence of the trips.
@@ -197,6 +203,51 @@ auto PricingCplex::generateColumns() const noexcept -> void {
             if (count >= N) {
                cout << "Seems like the algorithm entered an infinite loop.\n";
             }
+         }
+      }
+   }
+#else
+   vector <int> path = {O};
+   vector<vector<int>> allPaths;
+   getPathRecursive(path, allPaths);
+   cout << "   Pricing #" << m_depotId << " with " << allPaths.size() << " new columns.\n";
+   for (auto &p: allPaths) {
+      assert(p.size() > 2);
+      m_master->beginColumn(m_depotId);
+      for (size_t pos = 1; pos < p.size()-1; ++pos) {
+         m_master->addTrip(p[pos]);
+      }
+      m_master->commitColumn();
+   }
+#endif
+}
+
+auto PricingCplex::getPathRecursive(std::vector<int> &path, std::vector<std::vector<int>> &allPaths) const noexcept -> void {
+   const auto N = m_inst->numTrips() + 2;
+   const auto O = N - 2;
+   const auto D = N - 1;
+
+   if (path.back() == O) {
+      for (int i = 0; i < m_inst->numTrips(); ++i) {
+         if (auto col = m_x[O][i]; col.getImpl() and m_cplex.getValue(col) >= 0.5) {
+            path.push_back(i);
+            getPathRecursive(path, allPaths);
+            path.pop_back();
+         }
+      }
+   } else {
+
+      if (auto col = m_x[path.back()][D]; col.getImpl() && m_cplex.getValue(col) >= 0.5) {
+         path.push_back(D);
+         allPaths.push_back(path);
+         path.pop_back();
+      }
+
+      for (auto &p: m_inst->deadheadSuccAdj(path.back())) {
+         if (auto col = m_x[path.back()][p.first]; m_cplex.getValue(col) >= 0.5) {
+            path.push_back(p.first);
+            getPathRecursive(path, allPaths);
+            path.pop_back();
          }
       }
    }

@@ -22,7 +22,7 @@ CgMasterGlpk::CgMasterGlpk(const Instance &inst, bool quiet): m_inst(&inst) {
    for (int i = 0; i < m_inst->numTrips(); ++i, ++rowId) {
       snprintf(buf, sizeof buf, "task_assign#%d", i);
       glp_set_row_name(m_model, rowId, buf);
-      glp_set_row_bnds(m_model, rowId, GLP_FX, 1.0, 1.0);
+      glp_set_row_bnds(m_model, rowId, GLP_LO, 1.0, 1.0);
    }
 
    // Depot capacity constraints.
@@ -40,8 +40,8 @@ CgMasterGlpk::CgMasterGlpk(const Instance &inst, bool quiet): m_inst(&inst) {
       snprintf(buf, sizeof buf, "dummy#%d", i);
       glp_set_col_name(m_model, colId, buf);
       glp_set_col_kind(m_model, colId, GLP_CV);
-      glp_set_col_bnds(m_model, colId, GLP_DB, 0.0, 1.0);
-      glp_set_obj_coef(m_model, colId, 1e9);
+      glp_set_col_bnds(m_model, colId, GLP_LO, 0.0, 0.0);
+      glp_set_obj_coef(m_model, colId, 1e7);
 
       vector<double> coefs {0.0, 1.0};
       vector<int> rows {0, i+1};
@@ -60,12 +60,10 @@ auto CgMasterGlpk::writeLp(const char *fname) const noexcept -> void {
    glp_write_lp(m_model, nullptr, fname);
 }
 
-auto CgMasterGlpk::solve() const noexcept -> double {
+auto CgMasterGlpk::solve() noexcept -> double {
    glp_smcp parm;
    glp_init_smcp(&parm);
-
    parm.meth = GLP_PRIMAL;
-   
    glp_simplex(m_model, &parm);
    return glp_get_obj_val(m_model);
 }
@@ -90,7 +88,8 @@ auto CgMasterGlpk::beginColumn(int depotId) noexcept -> void {
    m_newcolCost = 0.0;
    m_newcolLastTrip = -1;
    
-   // Acts as a 'clear', because GLPK uses base-1 indexing.
+   // Acts as a 'clear', because GLPK uses base-1 indexing, and it 
+   // starts scanning indices from position 1.
    m_newcolRows.resize(1);
    m_newcolCoefs.resize(1);
 
@@ -103,18 +102,14 @@ auto CgMasterGlpk::addTrip(int trip) noexcept -> void {
    assert(trip >= 0 && trip < m_inst->numTrips());
 
    if (m_newcolLastTrip == -1) {
-      // Adds the pull-out cost if this is the first trip of the path
       m_newcolCost += m_inst->sourceCost(m_newcolDepot, trip);
    } else {
-      // Adds the deadheading cost if there is any other trip preceeding the current one
       m_newcolCost += m_inst->deadheadCost(m_newcolLastTrip, trip);
    }
 
-   // Sets the coefficient for trip assignment
    m_newcolRows.push_back(trip+1);
    m_newcolCoefs.push_back(1.0);
 
-   // Updates the marker for the last trip
    m_newcolLastTrip = trip;
 }
 
@@ -126,8 +121,19 @@ auto CgMasterGlpk::commitColumn() noexcept -> void {
 
    glp_set_col_name(m_model, colId, m_newcolBuf);
    glp_set_col_kind(m_model, colId, GLP_CV);
-   glp_set_col_bnds(m_model, colId, GLP_DB, 0.0, 1.0);
+   glp_set_col_bnds(m_model, colId, GLP_LO, 0.0, 0.0);
    glp_set_obj_coef(m_model, colId, m_newcolCost);
 
    glp_set_mat_col(m_model, colId, m_newcolRows.size()-1, m_newcolRows.data(), m_newcolCoefs.data());
+}
+
+auto CgMasterGlpk::numColumns() const noexcept -> int {
+   return glp_get_num_cols(m_model);
+}
+
+auto CgMasterGlpk::setAssignmentType(char sense) noexcept -> void {
+   int ind = sense == 'G' ? GLP_LO : GLP_FX;
+   for (int i = 0; i < m_inst->numTrips(); ++i) {
+      glp_set_row_bnds(m_model, i+1, ind, 1.0, 1.0);
+   }
 }

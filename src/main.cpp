@@ -2,7 +2,11 @@
 #include "ModelCbc.h"
 #include "Timer.h"
 #include "colgen/CgMasterCplex.h"
+#include "colgen/CgMasterGlpk.h"
 #include "colgen/PricingCplex.h"
+#include "colgen/PricingSpfa.h"
+#include "colgen/PricingCbc.h"
+#include "colgen/PricingGlpk.h"
 
 #include <iostream>
 #include <iomanip>
@@ -37,6 +41,11 @@ auto main(int argc, char *argv[]) noexcept -> int {
       "Number of depots: " << inst.numDepots() << "\n" <<
       "Number of trips: " << inst.numTrips() << "\n\n";
 
+   cout << "Using GNU GLPK " << glp_version() << "\n";
+   cout << "Using Coin-OR CBC " << Cbc_getVersion() << "\n";
+   cout << "Using IBM ILOG CPLEX " << CPX_VERSION << "\n";
+   
+
    if (0) {
       ModelCbc comp{inst};
       comp.writeLp("cbc.lp");
@@ -45,11 +54,11 @@ auto main(int argc, char *argv[]) noexcept -> int {
    // Optimization toolkit initialization.
    tm.start();
    cout << "Initializing algorithms..." << endl;
-   CgMasterCplex master{inst};
+   CgMasterGlpk master{inst};
    bool relaxed = true;
    
    // Then creates the pricing subproblems.
-   using PricingAlg = PricingCplex;
+   using PricingAlg = PricingGlpk;
    vector<unique_ptr<PricingAlg>> pricing;
    for (int k = 0; k < inst.numDepots(); ++k) {
       pricing.emplace_back(make_unique<PricingAlg>(inst, master, k));
@@ -59,6 +68,7 @@ auto main(int argc, char *argv[]) noexcept -> int {
 
    // Column generation - main loop
    tm.start();
+   int threads = 1;
    for (int iter = 0; iter < 1500 and !MdvspSigInt; ++iter) {
       const auto rmp = master.solve();
 
@@ -69,21 +79,20 @@ auto main(int argc, char *argv[]) noexcept -> int {
       double lbPricing = rmp;
       bool newCols = false;
 
-      #pragma omp parallel for default(shared) private(buf) schedule(static, 1)
+      #pragma omp parallel for default(shared) private(buf) schedule(static, 1) num_threads(threads)
       for (size_t i = 0; i < pricing.size(); ++i) {
          auto &sp = pricing[i];
-         const auto pobj = sp->solve();
+         sp->solve();
+      }
 
-         // snprintf(buf, sizeof buf, "sp%d-%d.lp", sp->depotId(), iter);
-         // sp->writeLp(buf);         
+      for (size_t i = 0; i < pricing.size(); ++i) {
+         auto &sp = pricing[i];
+         const auto pobj = sp->getObjValue();
 
-         #pragma omp critical
-         {
-            lbPricing += pobj;
-            if (pobj <= -0.00001) {
-               sp->generateColumns();
-               newCols = true;
-            }
+         lbPricing += pobj;
+         if (pobj <= -0.01) {
+            sp->generateColumns();
+            newCols = true;
          }
       }
 
@@ -99,7 +108,9 @@ auto main(int argc, char *argv[]) noexcept -> int {
             break;
          }
       }
+      threads = 8;
    }
+
    master.solve();
    cout << "\n" << master.getObjValue() << "\n";
 

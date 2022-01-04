@@ -132,3 +132,10 @@ ModelCbc::~ModelCbc() {
 auto ModelCbc::writeLp(const char *fname) const noexcept -> void {
    Cbc_writeLp(m_model, fname);
 }
+
+auto ModelCbc::changeBounds(int k, int i, int j, double lb, double ub) noexcept -> void {
+   auto colId = m_x[k][i][j];
+   assert(colId != -1);
+   Cbc_setColLower(m_model, colId, lb);
+   Cbc_setColUpper(m_model, colId, ub);
+}

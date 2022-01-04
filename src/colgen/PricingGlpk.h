@@ -4,12 +4,13 @@
 #include "CgMasterInterface.h"
 #include "CgPricingInterface.h"
 
-#include <ilcplex/ilocplex.h>
+#include <boost/multi_array.hpp>
+#include <glpk.h>
 
-class PricingCplex: public CgPricingInterface {
+class PricingGlpk: public CgPricingInterface {
 public:
-   PricingCplex(const Instance &inst, CgMasterInterface &master, int depotId);
-   virtual ~PricingCplex();
+   PricingGlpk(const Instance &inst, CgMasterInterface &master, const int depotId);
+   virtual ~PricingGlpk();
 
    auto writeLp(const char *fname) const noexcept -> void;
 
@@ -21,14 +22,11 @@ public:
 
 private:
    const Instance *m_inst;
-   const int m_depotId;
    CgMasterInterface *m_master;
-   
-   IloEnv m_env;
-   IloModel m_model;
-   IloCplex m_cplex;
-   IloObjective m_obj;
-   IloArray<IloNumVarArray> m_x;
+   const int m_depotId;
 
-   auto getPathRecursive(std::vector <int> &path, std::vector<std::vector<int>> &allPaths) const noexcept -> void;
+   glp_prob *m_model;
+   boost::multi_array<int, 2> m_x;
+
+   auto getPathRecursive(std::vector<int> &path, std::vector<std::vector<int>> &allPaths) const noexcept -> void;
 };
