@@ -14,6 +14,10 @@ add_definitions(
 
 include_directories(src)
 
+# set(GLPK_PREFIX /home/alberto/work/glpk-5.0/prefix)
+# include_directories(${GLPK_PREFIX}/include)
+# link_directories(${GLPK_PREFIX}/lib)
+
 set(CPLEX_PREFIX /home/alberto/.local/ibm/ILOG/CPLEX_Studio201/)
 include_directories(
    ${CPLEX_PREFIX}/cplex/include 
@@ -33,13 +37,13 @@ add_executable(main
    src/ModelCbc.cpp
 
    # Implementations of the master problem
-   # src/CgMasterGlpk.cpp
+   src/colgen/CgMasterGlpk.cpp
    src/colgen/CgMasterCplex.cpp
 
    # Implementation of pricing algorithms.
-   # src/SpfaPricing.cpp
-   # src/PricingGlpk.cpp
-   # src/PricingCbc.cpp   
+   src/colgen/PricingSpfa.cpp
+   src/colgen/PricingGlpk.cpp
+   src/colgen/PricingCbc.cpp   
    src/colgen/PricingCplex.cpp
 )
 

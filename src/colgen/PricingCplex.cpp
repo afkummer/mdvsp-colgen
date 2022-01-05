@@ -19,7 +19,7 @@ PricingCplex::PricingCplex(const Instance &inst, CgMasterInterface &master, int 
    for (int i = 0; i < N; ++i)
       m_x[i] = IloNumVarArray(m_env, N);
 
-   const auto VarTy = IloNumVar::Float;
+   const auto VarTy = IloNumVar::Bool;
    for (int i = 0; i < m_inst->numTrips(); ++i) {
       // Creates source arcs.
       if (auto cost = m_inst->sourceCost(m_depotId, i); cost != -1) {
@@ -82,7 +82,7 @@ PricingCplex::PricingCplex(const Instance &inst, CgMasterInterface &master, int 
       }
 
       snprintf(buf, sizeof buf, "single_path#%d", m_depotId);
-      IloConstraint c = expr <= 5;
+      IloConstraint c = expr <= 1;
       c.setName(buf);
       m_model.add(c);
       expr.clear();

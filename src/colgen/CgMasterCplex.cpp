@@ -117,6 +117,7 @@ auto CgMasterCplex::getDepotCapDual(int k) const noexcept -> double {
 }
 
 auto CgMasterCplex::beginColumn(int depotId) noexcept -> void {
+   assert(depotId >= 0 && depotId < m_inst->numDepots());
    m_coefs.add(make_pair(depotId + m_inst->numTrips(), 1.0));
    m_newcolDepotId = depotId;
    m_lastTrip = -1;
@@ -127,6 +128,7 @@ auto CgMasterCplex::beginColumn(int depotId) noexcept -> void {
 }
 
 auto CgMasterCplex::addTrip(int trip) noexcept -> void {
+   assert(trip >= 0 && trip < m_inst->numTrips());
    m_coefs.add(make_pair(trip, 1.0));
    if (m_lastTrip == -1) {
       m_newcolCost += m_inst->sourceCost(m_newcolDepotId, trip);

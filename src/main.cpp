@@ -9,6 +9,7 @@
 #include "colgen/PricingGlpk.h"
 
 #include <iostream>
+#include <string>
 #include <iomanip>
 #include <csignal>
 
@@ -22,6 +23,74 @@ void sigintHandler(int s) {
       cout << "MDVSP: SIGINT received." << endl;
    }
 }
+
+double memUsageMB() {
+   ifstream fid("/proc/self/status");
+   if (!fid)
+      return 0.0;
+   string line;
+   int memkb;
+   while (getline(fid, line)) {
+      if (line.find("VmRSS:", 0) != string::npos) {
+         sscanf(line.data(), "%*s %d", &memkb);         
+      }
+   }
+   return double(memkb) / 1024;
+}
+
+struct {
+   string mode {"??"};
+   int iter;
+   double ub;
+   double lb;
+   double rmpTime;
+   double pricingTime;
+   double totalTime;
+   int numCols;
+   double memMB;
+
+   int linesPrint{0};
+
+   auto printHeaders() noexcept -> void {
+      cout <<
+         setw(3) << "Asg" << 
+         setw(6) << "Iter" <<
+         setw(10) << "T.Time" << 
+         setw(10) << "T.RMP" << 
+         setw(10) << "T.SP" << 
+         setw(16) << "LB   " << 
+         setw(16) << "UB   " << 
+         setw(12) << "Gap(%)" << 
+         setw(10) << "N.Cols" <<
+         setw(10) << "MemMB" << 
+      "\n";
+   }
+
+   auto printData() noexcept -> void {
+      if (linesPrint % 15 == 0) {
+         if (linesPrint != 0)
+            cout << "\n\n";
+         printHeaders();
+      }
+
+      double gap = (ub-lb)/ub*100.0;
+      cout <<
+         fixed << 
+         setw(3) << mode << 
+         setw(6) << iter << 
+         setw(10) << setprecision(2) << totalTime << 
+         setw(10) << setprecision(2) << rmpTime << 
+         setw(10) << setprecision(2) << pricingTime << 
+         setw(16) << setprecision(2) << lb << 
+         setw(16) << setprecision(2) << ub << 
+         setw(12) << setprecision(2) << gap << 
+         setw(10) << numCols <<
+         setw(10) << setprecision(2) << memMB << 
+      "\n";
+      ++linesPrint;
+   }
+
+} TtyOutput;
 
 auto main(int argc, char *argv[]) noexcept -> int {
    if (argc != 2) {
@@ -44,33 +113,40 @@ auto main(int argc, char *argv[]) noexcept -> int {
    cout << "Using GNU GLPK " << glp_version() << "\n";
    cout << "Using Coin-OR CBC " << Cbc_getVersion() << "\n";
    cout << "Using IBM ILOG CPLEX " << CPX_VERSION << "\n";
-   
-
-   if (0) {
-      ModelCbc comp{inst};
-      comp.writeLp("cbc.lp");
-   }
 
    // Optimization toolkit initialization.
    tm.start();
-   cout << "Initializing algorithms..." << endl;
-   CgMasterGlpk master{inst};
+   cout << "\nInitializing algorithms..." << endl;
+
+   if (1) {
+      ModelCbc comp{inst};
+      comp.writeLp("cbc.lp");
+   }
+   
+   CgMasterCplex master{inst};
    bool relaxed = true;
+   bool heurPricing = true;
    
    // Then creates the pricing subproblems.
-   using PricingAlg = PricingGlpk;
-   vector<unique_ptr<PricingAlg>> pricing;
+   vector<unique_ptr<CgPricingInterface>> pricing;
    for (int k = 0; k < inst.numDepots(); ++k) {
-      pricing.emplace_back(make_unique<PricingAlg>(inst, master, k));
+      pricing.emplace_back(make_unique<PricingSpfa>(inst, master, k));
    }
 
-   cout << "Time spent preparing the algorithms: " << tm.elapsed() << " sec.\n";
+   cout << "Time spent preparing the algorithms: " << tm.elapsed() << " sec.\n\n";
 
    // Column generation - main loop
    tm.start();
+   TtyOutput.mode = "G+H";
    int threads = 1;
    for (int iter = 0; iter < 1500 and !MdvspSigInt; ++iter) {
+      Timer tm2;
+      tm2.start();
       const auto rmp = master.solve();
+      tm2.finish();
+      TtyOutput.iter = iter;
+      TtyOutput.ub = rmp;
+      TtyOutput.rmpTime = tm2.elapsed();
 
       // snprintf(buf, sizeof buf, "m%d.lp", iter);
       // master.writeLp(buf);
@@ -79,6 +155,7 @@ auto main(int argc, char *argv[]) noexcept -> int {
       double lbPricing = rmp;
       bool newCols = false;
 
+      tm2.start();
       #pragma omp parallel for default(shared) private(buf) schedule(static, 1) num_threads(threads)
       for (size_t i = 0; i < pricing.size(); ++i) {
          auto &sp = pricing[i];
@@ -95,20 +172,41 @@ auto main(int argc, char *argv[]) noexcept -> int {
             newCols = true;
          }
       }
+      tm2.finish();
 
-      cout << "@>>> Iter: " << iter << "   Elapsed: " << tm.elapsed() << " sec   Primal: " << rmp << "   Dual: " << lbPricing << "   NC: " << master.numColumns() << "\n";
+      TtyOutput.lb = lbPricing;
+      TtyOutput.pricingTime = tm2.elapsed();
+      TtyOutput.totalTime = tm.elapsed();
+      TtyOutput.numCols = master.numColumns();
+      TtyOutput.memMB = memUsageMB();
+
+      TtyOutput.printData();
+
+      cout << "\n\n";
+
+      // cout << "@>>> Iter: " << iter << "   Elapsed: " << tm.elapsed() << " sec   Primal: " << rmp << "   Dual: " << lbPricing << "   NC: " << master.numColumns() << "\n";
       
       if (!newCols) {
          if (relaxed) {
             relaxed = false;
-            cout << "\n***** CONVERTING MASTER RELAXATION. *****\n";
+            TtyOutput.mode = "E+" + heurPricing ? 'H' : 'E';
+            cout << "***** CONVERTING MASTER RELAXATION. *****\n";
             master.setAssignmentType('E');
          } else {
             cout << "\nNo new columns generated.\nStopping the algorithm.\n";
             break;
          }
       }
-      threads = 8;
+      if (iter == 4000) {
+         for (int k = 0; k < inst.numDepots(); ++k) {
+            pricing[k].reset(new PricingGlpk(inst, master, k));
+         }
+         cout << "Replacing pricing algorithms.\n";
+         threads = 1;
+         TtyOutput.mode = "E+E";
+      } else {
+         threads = 8;
+      }
    }
 
    master.solve();
