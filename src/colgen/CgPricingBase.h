@@ -15,6 +15,7 @@ public:
    virtual auto writeLp(const char *fname) const noexcept -> void = 0;
 
    auto depotId() const noexcept -> int;
+   virtual auto isExact() const noexcept -> bool = 0;
 
    virtual auto solve() noexcept -> double = 0;
    virtual auto getObjValue() const noexcept -> double = 0;

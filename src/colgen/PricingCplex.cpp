@@ -111,6 +111,10 @@ auto PricingCplex::writeLp(const char *fname) const noexcept -> void {
    m_cplex.exportModel(fname);
 }
 
+auto PricingCplex::isExact() const noexcept -> bool {
+   return true;
+}
+
 auto PricingCplex::solve() noexcept -> double {
    const auto N = m_inst->numTrips() + 2;
    const auto O = N - 2;

@@ -105,6 +105,10 @@ auto PricingCbc::writeLp(const char *fname) const noexcept -> void {
    m_lpSolver->writeLp(fname, "");
 }
 
+auto PricingCbc::isExact() const noexcept -> bool {
+   return true;
+}
+
 auto PricingCbc::solve() noexcept -> double {
    const auto N = numNodes();
    const auto O = sourceNode();

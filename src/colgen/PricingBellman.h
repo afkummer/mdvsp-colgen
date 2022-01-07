@@ -2,13 +2,11 @@
 
 #include "CgPricingBase.h"
 
-#include <ilcplex/ilocplex.h>
-
-class PricingCplex: public CgPricingBase {
+class PricingBellman: public CgPricingBase {
 public:
-   PricingCplex(const Instance &inst, CgMasterBase &master, const int depotId, int maxPaths = 5);
-   virtual ~PricingCplex();
-
+   PricingBellman(const Instance &inst, CgMasterBase &dp, int depotId, bool singlePath = false);
+   virtual ~PricingBellman();
+   
    virtual auto getSolverName() const noexcept -> std::string override;
    virtual auto writeLp(const char *fname) const noexcept -> void override;
 
@@ -17,13 +15,10 @@ public:
    virtual auto solve() noexcept -> double override;
    virtual auto getObjValue() const noexcept -> double override;
    virtual auto generateColumns() const noexcept -> int override;
-
-private:   
-   IloEnv m_env;
-   IloModel m_model;
-   IloCplex m_cplex;
-   IloObjective m_obj;
-   IloArray<IloNumVarArray> m_x;
+   
+private:
+   std::vector<double> m_dist;
+   std::vector<int> m_pred;
 
    auto findPathRecursive(std::vector<int> &path, double pcost, std::vector<std::vector<int>> &allPaths) const noexcept -> void;
 };

@@ -1,12 +1,15 @@
 #include "PricingGlpk.h"
+#include "CgMasterBase.h"
+#include "Instance.h"
 
 #include <algorithm>
 #include <iostream>
 
 using namespace std;
 
-PricingGlpk::PricingGlpk(const Instance &inst, CgMasterInterface &master, const int depotId):
-m_inst(&inst), m_master(&master), m_depotId(depotId) {
+PricingGlpk::PricingGlpk(const Instance &inst, CgMasterBase &master, const int depotId, int maxPaths): 
+   CgPricingBase(inst, master, depotId, maxPaths) {
+
    char buf[128];
    m_model = glp_create_prob();
    
@@ -17,9 +20,9 @@ m_inst(&inst), m_master(&master), m_depotId(depotId) {
    glp_set_obj_name(m_model, "shortest_path");
 
    // In this implementation, we use the original IDs for trips
-   const auto N = m_inst->numTrips()+2;
-   const auto O = N-2;
-   const auto D = N-1;
+   const auto N = numNodes();
+   const auto O = sourceNode();
+   const auto D = sinkNode();
 
    // Reserve memory for storing the variables.
    m_x.resize(boost::extents[N][N]);
@@ -92,7 +95,7 @@ m_inst(&inst), m_master(&master), m_depotId(depotId) {
    }
 
    // Single path per solve call.
-   if (1) {
+   if (maxPaths >= 1) {
       for (int i = 0; i < m_inst->numTrips(); ++i) {
          // Checks if there is source arc.
          if (int colId = m_x[O][i]; colId != -1) {
@@ -100,7 +103,7 @@ m_inst(&inst), m_master(&master), m_depotId(depotId) {
             matCoefs.push_back(1.0);
          }
       }
-      int rowId = glp_add_rows(m_model, 1);
+      int rowId = glp_add_rows(m_model, maxPaths);
       snprintf(buf, sizeof buf, "max_paths");
       glp_set_row_name(m_model, rowId, buf);
       glp_set_row_bnds(m_model, rowId, GLP_UP, 0.0, 6.0);
@@ -115,18 +118,21 @@ PricingGlpk::~PricingGlpk() {
    glp_delete_prob(m_model);
 }
 
+auto PricingGlpk::getSolverName() const noexcept -> std::string {
+   return string("GLPK ") + glp_version();
+}
+
 auto PricingGlpk::writeLp(const char *fname) const noexcept -> void {
    glp_write_lp(m_model, nullptr, fname);
 }
 
-auto PricingGlpk::depotId() const noexcept -> int {
-   return m_depotId;
+auto PricingGlpk::isExact() const noexcept -> bool {
+   return true;
 }
 
 auto PricingGlpk::solve() noexcept -> double {
-   const auto N = m_inst->numTrips() + 2;
-   const auto O = N - 2;
-   const auto D = N - 1;
+   const auto O = sourceNode();
+   const auto D = sinkNode();
 
    glp_term_out(GLP_OFF);
 
@@ -187,51 +193,46 @@ auto PricingGlpk::getObjValue() const noexcept -> double {
    return glp_mip_obj_val(m_model);
 }
 
-auto PricingGlpk::generateColumns() const noexcept -> void {
-   const auto N = m_inst->numTrips() + 2;
-   const auto O = N - 2;
-   const auto D = N - 1;
-
-   vector<int> path = {O};
+auto PricingGlpk::generateColumns() const noexcept -> int {
    vector<vector<int>> allPaths;
-   getPathRecursive(path, allPaths);
-   // cout << "   Pricing #" << m_depotId << " with " << allPaths.size() << " new columns and cost " << getObjValue() << ".\n";
-   for (auto &p : allPaths) {
-      assert(p.size() > 2);
+
+   // I think the algorithm can be accelerated by skipping the calculation
+   // of reduced cost per path.
+
+   for (int i = 0; i < m_inst->numTrips(); ++i) {
+      if (auto col = m_x[sourceNode()][i]; col != -1 && glp_mip_col_val(m_model, col) >= 0.98) {
+         vector<int> path = {i};
+         double pcost = m_inst->sourceCost(m_depotId, i) - m_master->getDepotCapDual(m_depotId);
+
+         findPathRecursive(path, pcost, allPaths);
+      }
+   }
+
+   for (const auto &p : allPaths) {
       m_master->beginColumn(m_depotId);
-      for (size_t pos = 1; pos < p.size() - 1; ++pos) {
-         m_master->addTrip(p[pos]);
+      for (auto it = p.begin(); it != p.end(); ++it) {
+         m_master->addTrip(*it);
       }
       m_master->commitColumn();
    }
+
+   return allPaths.size();
 }
 
-auto PricingGlpk::getPathRecursive(std::vector<int> &path, std::vector<std::vector<int>> &allPaths) const noexcept -> void {
-   const auto N = m_inst->numTrips() + 2;
-   const auto O = N - 2;
-   const auto D = N - 1;
-
-   if (path.back() == O) {
-      for (int i = 0; i < m_inst->numTrips(); ++i) {
-         if (auto colId = m_x[O][i]; colId != -1 and glp_mip_col_val(m_model, colId) >= 0.99) {
-            path.push_back(i);
-            getPathRecursive(path, allPaths);
-            path.pop_back();
-         }
-      }
-   } else {
-      if (auto colId = m_x[path.back()][D]; colId != -1 and glp_mip_col_val(m_model, colId) >= 0.99) {
-         path.push_back(D);
+auto PricingGlpk::findPathRecursive(std::vector<int> &path, double pcost, std::vector<std::vector<int>> &allPaths) const noexcept -> void {
+   if (auto col = m_x[path.back()][sinkNode()]; col != -1 && glp_mip_col_val(m_model, col) >= 0.98) {
+      double cst = pcost + (m_inst->sinkCost(m_depotId, path.back()) - m_master->getTripDual(path.back()));
+      if (cst <= -0.001) {
          allPaths.push_back(path);
-         path.pop_back();
       }
+   }
 
-      for (auto &p : m_inst->deadheadSuccAdj(path.back())) {
-         if (auto colId = m_x[path.back()][p.first]; colId != -1 and glp_mip_col_val(m_model, colId) >= 0.99) {
-            path.push_back(p.first);
-            getPathRecursive(path, allPaths);
-            path.pop_back();
-         }
+   for (const auto &p : m_inst->deadheadSuccAdj(path.back())) {
+      if (auto col = m_x[path.back()][p.first]; col != -1 && glp_mip_col_val(m_model, col) >= 0.98) {
+         double cst = pcost + (p.second - m_master->getTripDual(path.back()));
+         path.push_back(p.first);
+         findPathRecursive(path, cst, allPaths);
+         path.pop_back();
       }
    }
 }
