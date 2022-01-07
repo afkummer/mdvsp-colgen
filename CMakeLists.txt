@@ -82,4 +82,7 @@ target_link_libraries(main
    -lconcert
    -lcplex   
    -ldl
+
+   # Boost program-options
+   -lboost_program_options
 )
