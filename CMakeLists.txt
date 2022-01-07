@@ -40,7 +40,7 @@ add_executable(main
 
    # Implementations of the master problem
    src/colgen/CgMasterBase.cpp
-   # src/colgen/CgMasterGlpk.cpp
+   src/colgen/CgMasterGlpk.cpp
    src/colgen/CgMasterCplex.cpp
 
    # Implementation of pricing algorithms.
