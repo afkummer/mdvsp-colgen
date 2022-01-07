@@ -3,7 +3,7 @@
 #include "Instance.h"
 
 #include <boost/multi_array.hpp>
-#include <coin/Cbc_C_Interface.h>
+#include <coin/CbcModel.hpp>
 
 class ModelCbc {
 public:
@@ -16,7 +16,8 @@ public:
 
 private:
    const Instance *m_inst;
-   
-   Cbc_Model *m_model;
-   boost::multi_array<int,3> m_x;
+   std::unique_ptr<OsiClpSolverInterface> m_lpSolver;
+   boost::multi_array<int, 3> m_x;
+
+   std::unique_ptr<CbcModel> m_model;   
 };

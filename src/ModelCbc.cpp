@@ -3,18 +3,23 @@
 #include <algorithm>
 #include <iostream>
 
+#include <coin/OsiClpSolverInterface.hpp>
+#include <coin/CoinModel.hpp>
+
 using namespace std;
 
 ModelCbc::ModelCbc(const Instance &inst): m_inst(&inst) {
    char buf[128];
-   m_model = Cbc_newModel();
-   Cbc_setProblemName(m_model, "compact_mdvsp_coin_cbc");
-   Cbc_setObjSense(m_model, 1);
+   CoinModel builder;
+
+   builder.setProblemName("compact_mdvsp_coin_cbc");
+   builder.setOptimizationDirection(1.0);
 
    // Create the variables.
    const auto N = m_inst->numTrips()+2;
    const auto O = N-2;
    const auto D = N-1;
+
    m_x.resize(boost::extents[m_inst->numDepots()][N][N]);
    fill_n(m_x.data(), m_x.num_elements(), -1);
 
@@ -23,10 +28,8 @@ ModelCbc::ModelCbc(const Instance &inst): m_inst(&inst) {
       for (int k = 0; k < m_inst->numDepots(); ++k) {
          if (auto cost = m_inst->sourceCost(k, i); cost != -1) {
             snprintf(buf, sizeof buf, "source#%d#%d#%d", k, O, i);
-            int colId = Cbc_getNumCols(m_model);
-            Cbc_addCol(m_model, buf, 0.0, 1.0, cost, 1, 0, nullptr, nullptr);
-            m_x[k][O][i] = colId;
-            
+            m_x[k][O][i] = builder.numberColumns();
+            builder.addColumn(0, nullptr, nullptr, 0.0, 1.0, cost, buf, true);
          }
       }
 
@@ -34,9 +37,8 @@ ModelCbc::ModelCbc(const Instance &inst): m_inst(&inst) {
       for (int k = 0; k < m_inst->numDepots(); ++k) {
          if (auto cost = m_inst->sinkCost(k, i); cost != -1) {
             snprintf(buf, sizeof buf, "sink#%d#%d#%d", k, i, D);
-            int colId = Cbc_getNumCols(m_model);
-            Cbc_addCol(m_model, buf, 0.0, 1.0, cost, 1, 0, nullptr, nullptr);
-            m_x[k][i][D] = colId;  
+            m_x[k][i][D] = builder.numberColumns();
+            builder.addColumn(0, nullptr, nullptr, 0.0, 1.0, cost, buf, true);
          }
       }
 
@@ -44,9 +46,8 @@ ModelCbc::ModelCbc(const Instance &inst): m_inst(&inst) {
       for (auto &p: m_inst->deadheadSuccAdj(i)) {
          for (int k = 0; k < m_inst->numDepots(); ++k) {
             snprintf(buf, sizeof buf, "deadhead#%d#%d#%d", k, i, p.first);
-            int colId = Cbc_getNumCols(m_model);
-            Cbc_addCol(m_model, buf, 0.0, 1.0, p.second, 1, 0, nullptr, nullptr);
-            m_x[k][i][p.first] = colId;
+            m_x[k][i][p.first] = builder.numberColumns();
+            builder.addColumn(0, nullptr, nullptr, 0.0, 1.0, p.second, buf, true);
          }
       }
    }
@@ -70,7 +71,7 @@ ModelCbc::ModelCbc(const Instance &inst): m_inst(&inst) {
       }
 
       snprintf(buf, sizeof buf, "assignment#%d", i);
-      Cbc_addRow(m_model, buf, cols.size(), cols.data(), coefs.data(), 'E', 1.0);
+      builder.addRow(cols.size(), cols.data(), coefs.data(), 1.0, 1.0, buf);
    }
 
    // Adds the flow conservation constraints.
@@ -104,7 +105,7 @@ ModelCbc::ModelCbc(const Instance &inst): m_inst(&inst) {
          }
 
          snprintf(buf, sizeof buf, "flow_consevation#%d#%d", k, i);
-         Cbc_addRow(m_model, buf, cols.size(), cols.data(), coefs.data(), 'E', 0.0);
+         builder.addRow(cols.size(), cols.data(), coefs.data(), 0.0, 0.0, buf);
       }      
    }
 
@@ -121,21 +122,24 @@ ModelCbc::ModelCbc(const Instance &inst): m_inst(&inst) {
       }
 
       snprintf(buf, sizeof buf, "depot_cap#%d", k);
-      Cbc_addRow(m_model, buf, cols.size(), cols.data(), coefs.data(), 'L', m_inst->depotCapacity(k));
+      builder.addRow(cols.size(), cols.data(), coefs.data(), -numeric_limits<double>::infinity(), m_inst->depotCapacity(k), buf);
    }
+
+   m_lpSolver.reset(new OsiClpSolverInterface);
+   m_lpSolver->loadFromCoinModel(builder);
+   m_model.reset(new CbcModel(*m_lpSolver));
 }
 
 ModelCbc::~ModelCbc() {
-   Cbc_deleteModel(m_model);
+   // Empty
 }
 
 auto ModelCbc::writeLp(const char *fname) const noexcept -> void {
-   Cbc_writeLp(m_model, fname);
+   m_lpSolver->writeLp(fname, "");
 }
 
 auto ModelCbc::changeBounds(int k, int i, int j, double lb, double ub) noexcept -> void {
    auto colId = m_x[k][i][j];
    assert(colId != -1);
-   Cbc_setColLower(m_model, colId, lb);
-   Cbc_setColUpper(m_model, colId, ub);
+   m_lpSolver->setColBounds(colId, lb, ub);
 }
