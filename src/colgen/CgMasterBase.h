@@ -35,6 +35,10 @@ public:
    // By default, the model should be created with sense 'G'. 
    virtual auto setAssignmentType(char sense = 'G') noexcept -> void = 0;
 
+   // Capability of exporting/importing columns from file.
+   auto exportColumns(const char *fname) const noexcept -> void;
+   auto importColumns(const char *fname) noexcept -> int;
+
 protected:
    const Instance *m_inst;
    int m_numCols{0};
@@ -44,6 +48,10 @@ protected:
    double m_newcolCost;
    int m_newcolLastTrip;
    std::vector <int> m_newcolPath;
+
+   // Cached copy of the columns.
+   std::vector<int> m_colDepot;
+   std::vector<std::vector<int>> m_colTrips;
 
    virtual auto addColumn() noexcept -> void = 0;
 };

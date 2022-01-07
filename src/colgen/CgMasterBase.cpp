@@ -2,6 +2,7 @@
 
 #include "Instance.h"
 #include <cassert>
+#include <fstream>
 
 using namespace std;
 
@@ -40,8 +41,44 @@ auto CgMasterBase::commitColumn() noexcept -> void {
    m_newcolCost += m_inst->sinkCost(m_newcolDepot, m_newcolLastTrip);
    addColumn();
    ++m_numCols;
+
+   m_colDepot.push_back(m_newcolDepot);
+   m_colTrips.push_back(m_newcolPath);
 }
 
 auto CgMasterBase::numColumns() const noexcept -> int {
    return m_numCols;
+}
+
+auto CgMasterBase::exportColumns(const char *fname) const noexcept -> void {
+   ofstream fid(fname);
+   if (!fid) abort();
+
+   fid << m_colDepot.size() << "\n";
+   for (size_t i = 0; i < m_colDepot.size(); ++i) {
+      fid << m_colDepot[i] << " " << m_colTrips[i].size() << "\n";
+      for (int i: m_colTrips[i])
+         fid << i << "\n";
+   }
+}
+
+auto CgMasterBase::importColumns(const char *fname) noexcept -> int {
+   ifstream fid(fname);
+   if (!fid) abort();
+
+   int nc;
+   fid >> nc;
+   for (int i = 0; i < nc; ++i) {
+      int depot, nt;
+      fid >> depot >> nt;
+      beginColumn(depot);
+      for (int j = 0; j < nt; ++j) {
+         int t;
+         fid >> t;
+         addTrip(t);
+      }
+      commitColumn();
+   }
+   
+   return nc;
 }
