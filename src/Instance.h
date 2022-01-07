@@ -6,6 +6,10 @@
 #include <boost/multi_array.hpp>
 
 // Handles CTRL+C
+// If this variable is set to true, then the algorithms
+// need to obey this signal and stop their processing as soon as
+// possible. Otherwise, the user can sent a SIGQUIT to stop the
+// application immediatelly. (CTRL+\ on Linux)
 extern volatile bool MdvspSigInt;
 
 /**
@@ -31,11 +35,6 @@ public:
    auto sinkCost(int k, int trip) const noexcept -> int;
    auto deadheadCost(int pred, int succ) const noexcept -> int;
 
-   /// Mostly for debugging purposes.
-   /// Can also help devising some special loops without
-   /// too many branches/ifs.
-   auto rawCost(int i, int j) const noexcept -> int;
-
    // Returns a list of adjacent tasks that can succeed task `pred`.
    // The pairs store the successor task id (first), and the
    // associated deadheading cost (second.)
@@ -53,10 +52,8 @@ private:
    boost::multi_array<int, 2> m_matrix;
 
    // Cache of deadheading portion of the matrix.
-   // [pred task] -> list of successors
    // <0> -> succeeding task
    // <1> -> associated cost
    std::vector<std::vector<std::pair<int, int>>> m_dhCacheSucc;
-
    std::vector<std::vector<std::pair<int, int>>> m_dhCachePred;
 };

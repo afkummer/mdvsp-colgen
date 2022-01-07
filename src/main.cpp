@@ -1,16 +1,18 @@
 #include "Instance.h"
 #include "ModelCbc.h"
 #include "Timer.h"
+#include "colgen/CgMasterBase.h"
 #include "colgen/CgMasterCplex.h"
-#include "colgen/CgMasterGlpk.h"
+// #include "colgen/CgMasterGlpk.h"
 #include "colgen/PricingCplex.h"
-#include "colgen/PricingSpfa.h"
+// #include "colgen/PricingSpfa.h"
 #include "colgen/PricingCbc.h"
-#include "colgen/PricingGlpk.h"
+// #include "colgen/PricingGlpk.h"
 
 #include <iostream>
 #include <string>
 #include <iomanip>
+#include <fstream>
 #include <csignal>
 
 using namespace std;
@@ -24,6 +26,7 @@ void sigintHandler(int s) {
    }
 }
 
+/*
 double memUsageMB() {
    ifstream fid("/proc/self/status");
    if (!fid)
@@ -91,6 +94,7 @@ struct {
    }
 
 } TtyOutput;
+*/
 
 auto main(int argc, char *argv[]) noexcept -> int {
    if (argc != 2) {
@@ -110,8 +114,8 @@ auto main(int argc, char *argv[]) noexcept -> int {
       "Number of depots: " << inst.numDepots() << "\n" <<
       "Number of trips: " << inst.numTrips() << "\n\n";
 
-   cout << "Using GNU GLPK " << glp_version() << "\n";
-   cout << "Using Coin-OR CBC " << Cbc_getVersion() << "\n";
+   // cout << "Using GNU GLPK " << glp_version() << "\n";
+   // cout << "Using Coin-OR CBC " << Cbc_getVersion() << "\n";
    cout << "Using IBM ILOG CPLEX " << CPX_VERSION << "\n";
 
    // Optimization toolkit initialization.
@@ -128,25 +132,25 @@ auto main(int argc, char *argv[]) noexcept -> int {
    bool heurPricing = true;
    
    // Then creates the pricing subproblems.
-   vector<unique_ptr<CgPricingInterface>> pricing;
+   vector<unique_ptr<CgPricingBase>> pricing;
    for (int k = 0; k < inst.numDepots(); ++k) {
-      pricing.emplace_back(make_unique<PricingSpfa>(inst, master, k));
+      pricing.emplace_back(make_unique<PricingCbc>(inst, master, k, 5));
    }
 
    cout << "Time spent preparing the algorithms: " << tm.elapsed() << " sec.\n\n";
 
    // Column generation - main loop
    tm.start();
-   TtyOutput.mode = "G+H";
+   // TtyOutput.mode = "G+H";
    int threads = 1;
    for (int iter = 0; iter < 1500 and !MdvspSigInt; ++iter) {
       Timer tm2;
       tm2.start();
       const auto rmp = master.solve();
       tm2.finish();
-      TtyOutput.iter = iter;
-      TtyOutput.ub = rmp;
-      TtyOutput.rmpTime = tm2.elapsed();
+      // TtyOutput.iter = iter;
+      // TtyOutput.ub = rmp;
+      // TtyOutput.rmpTime = tm2.elapsed();
 
       // snprintf(buf, sizeof buf, "m%d.lp", iter);
       // master.writeLp(buf);
@@ -167,29 +171,29 @@ auto main(int argc, char *argv[]) noexcept -> int {
          const auto pobj = sp->getObjValue();
 
          lbPricing += pobj;
-         if (pobj <= -0.01) {
+         if (pobj <= -0.0001) {
             sp->generateColumns();
             newCols = true;
          }
       }
       tm2.finish();
 
-      TtyOutput.lb = lbPricing;
-      TtyOutput.pricingTime = tm2.elapsed();
-      TtyOutput.totalTime = tm.elapsed();
-      TtyOutput.numCols = master.numColumns();
-      TtyOutput.memMB = memUsageMB();
+      // TtyOutput.lb = lbPricing;
+      // TtyOutput.pricingTime = tm2.elapsed();
+      // TtyOutput.totalTime = tm.elapsed();
+      // TtyOutput.numCols = master.numColumns();
+      // TtyOutput.memMB = memUsageMB();
 
-      TtyOutput.printData();
+      // TtyOutput.printData();
 
-      cout << "\n\n";
+      // cout << "\n\n";
 
-      // cout << "@>>> Iter: " << iter << "   Elapsed: " << tm.elapsed() << " sec   Primal: " << rmp << "   Dual: " << lbPricing << "   NC: " << master.numColumns() << "\n";
+      cout << "@>>> Iter: " << iter << "   Elapsed: " << tm.elapsed() << " sec   Primal: " << rmp << "   Dual: " << lbPricing << "   NC: " << master.numColumns() << "\n";
       
       if (!newCols) {
          if (relaxed) {
             relaxed = false;
-            TtyOutput.mode = "E+" + heurPricing ? 'H' : 'E';
+            // TtyOutput.mode = "E+" + heurPricing ? 'H' : 'E';
             cout << "***** CONVERTING MASTER RELAXATION. *****\n";
             master.setAssignmentType('E');
          } else {
@@ -197,21 +201,21 @@ auto main(int argc, char *argv[]) noexcept -> int {
             break;
          }
       }
-      if (iter == 4000) {
-         for (int k = 0; k < inst.numDepots(); ++k) {
-            pricing[k].reset(new PricingGlpk(inst, master, k));
-         }
-         cout << "Replacing pricing algorithms.\n";
-         threads = 1;
-         TtyOutput.mode = "E+E";
-      } else {
-         threads = 8;
-      }
+      // if (iter == 4000) {
+      //    for (int k = 0; k < inst.numDepots(); ++k) {
+      //       pricing[k].reset(new PricingGlpk(inst, master, k));
+      //    }
+      //    cout << "Replacing pricing algorithms.\n";
+      //    threads = 1;
+      //    TtyOutput.mode = "E+E";
+      // } else {
+      //    threads = 8;
+      // }
    }
 
-   master.solve();
-   cout << "\n" << master.getObjValue() << "\n";
+   // master.solve();
+   // cout << "\n" << master.getObjValue() << "\n";
 
-   master.writeLp("masterFinal.lp");
+   // master.writeLp("masterFinal.lp");
    return EXIT_SUCCESS;
 }

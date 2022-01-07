@@ -63,7 +63,7 @@ auto Instance::numDepots() const noexcept -> int {
 }
 
 auto Instance::numTrips() const noexcept -> int {
-   // return 200;
+   return 50;
    return m_numTrips;
 }
 
@@ -88,12 +88,6 @@ auto Instance::deadheadCost(int pred, int succ) const noexcept -> int {
    assert(pred >= 0 && pred < m_numTrips);
    assert(succ >= 0 && succ < m_numTrips);
    return m_matrix[m_numDepots+pred][m_numDepots+succ];
-}
-
-auto Instance::rawCost(int i, int j) const noexcept -> int {
-   assert(i >= 0 && i < m_numDepots + m_numTrips);
-   assert(j >= 0 && j < m_numDepots + m_numTrips);
-   return m_matrix[i][j];
 }
 
 auto Instance::deadheadSuccAdj(int pred) const noexcept -> const std::vector<std::pair<int, int>> & {
