@@ -45,8 +45,9 @@ add_executable(main
 
    # Implementation of pricing algorithms.
    src/colgen/CgPricingBase.cpp
-   # src/colgen/PricingSpfa.cpp
-   # src/colgen/PricingGlpk.cpp
+   src/colgen/PricingBellman.cpp
+   src/colgen/PricingSpfa.cpp
+   src/colgen/PricingGlpk.cpp
    src/colgen/PricingCbc.cpp   
    src/colgen/PricingCplex.cpp
 )
