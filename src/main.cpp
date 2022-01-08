@@ -113,6 +113,7 @@ auto parseCommandline(int argc, char **argv) noexcept -> CmdParm {
 }
 
 auto solveCompactModel(const CmdParm &parm, const Instance &inst) noexcept -> int {
+   (void) parm;
    unique_ptr <ModelCbc> compact;
    cout << "Solution method of choice: compact formulation (Coin-OR CBC)\n";
   
@@ -139,18 +140,16 @@ auto solveCompactModel(const CmdParm &parm, const Instance &inst) noexcept -> in
 }
 
 auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -> int {
-   // Uses smart pointers to hold the implementation of solution methods.
+   // Uses smart pointers to manage the implementation of solution methods.
    // These automatically release all memory and any other resources when the 
    // objects go out of the scope (i.e., when this function returns).
    unique_ptr <CgMasterBase> master;
    vector<unique_ptr<CgPricingBase>> pricing;
    cout << "Solution method of choice: column generation\n";
 
-   // Timer for computing elapsed time while building the models.
-   Timer tm;   
-
    // Creates the master problem.
    const auto masterImpl = parm["master"].as<string>();
+   Timer tm;
    tm.start();
    cout << "\nBuilding master problem.\n";
    if (masterImpl == "glpk") {
@@ -211,7 +210,7 @@ auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -
       if (pricingPathControl)
          cout << "Generating up to " << maxPaths << " paths per subproblem.\n";
       else
-         cout << "WARNING: Fine-grained control of paths unavailable for the pricing solver.\n";
+         cout << "WARNING: Fine-grained control of generated paths unavailable for this pricing solver.\n";
    }
    cout << "Build time: " << tm.elapsed() << " sec\n";
    cout << "Current memory usage: " << fixed << setprecision(2) << getMemoryUsageKb() / 1024.0 << " MB\n"; 
@@ -283,6 +282,8 @@ auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -
       #pragma omp parallel for default(shared) schedule(static, 1) num_threads(maxThreads)
       for (size_t i = 0; i < pricing.size(); ++i) {
          auto &sp = pricing[i];
+         // This method already takes the dual multipliers from the master.
+         // All the work of updating subproblem obj is managed internally.
          sp->solve();
       }
       timePricing = tmInner.elapsed();
@@ -294,6 +295,8 @@ auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -
 
          lbObj += pobj;
          if (pobj <= -0.0001) {
+            // We could find new columns with negative reduced cost!
+            // Add them into RMP.
             newCols += sp->generateColumns();
          }
       }
@@ -312,6 +315,11 @@ auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -
             break;
          }
       }
+
+      // In case of using GLPK as subproblem solver: this changes the number of 
+      // parallel threads to its maximum, from iteration 2 and forth.
+      // This seems to be enough to circumvent GLPK difficulties when solving
+      // multiple independent problems in parallel.
       maxThreads = omp_get_max_threads();
    }
    
