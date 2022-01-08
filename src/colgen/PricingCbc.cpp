@@ -110,7 +110,6 @@ auto PricingCbc::isExact() const noexcept -> bool {
 }
 
 auto PricingCbc::solve() noexcept -> double {
-   const auto N = numNodes();
    const auto O = sourceNode();
    const auto D = sinkNode();
 

@@ -23,6 +23,7 @@ auto PricingBellman::getSolverName() const noexcept -> std::string {
 }
 
 auto PricingBellman::writeLp(const char *fname) const noexcept -> void {
+   (void) fname;
    cout << "WARNING: Bellman-Ford pricing does not support writing LP files. Command ignored\n";
 }
 
@@ -101,8 +102,6 @@ auto PricingBellman::getObjValue() const noexcept -> double {
 }
 
 auto PricingBellman::generateColumns() const noexcept -> int {
-   const auto N = numNodes();
-   const auto O = sourceNode();
    const auto D = sinkNode();
    
    vector<vector<int>> allPaths;
@@ -134,9 +133,7 @@ auto PricingBellman::generateColumns() const noexcept -> int {
 }
 
 auto PricingBellman::findPathRecursive(std::vector<int> &path, double pcost, std::vector<std::vector<int>> &allPaths) const noexcept -> void {
-   const auto N = numNodes();
    const auto O = sourceNode();
-   const auto D = sinkNode();
 
    int pred = m_pred[path.back()];
    if (pred == O) {

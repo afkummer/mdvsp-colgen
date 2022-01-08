@@ -24,6 +24,7 @@ auto PricingSpfa::getSolverName() const noexcept -> std::string {
 }
 
 auto PricingSpfa::writeLp(const char *fname) const noexcept -> void {
+   (void) fname;
    cout << "WARNING: SPFA pricing does not support writing LP files. Command ignored\n";
 }
 
@@ -33,7 +34,6 @@ auto PricingSpfa::isExact() const noexcept -> bool {
 
 auto PricingSpfa::solve() noexcept -> double {
    // Some initial definitions that help understanding the algorithm.
-   const auto N = numNodes();
    const auto O = sourceNode();
    const auto D = sinkNode();
 
@@ -105,8 +105,6 @@ auto PricingSpfa::getObjValue() const noexcept -> double {
 }
 
 auto PricingSpfa::generateColumns() const noexcept -> int {
-   const auto N = numNodes();
-   const auto O = sourceNode();
    const auto D = sinkNode();
    
    vector<vector<int>> allPaths;
@@ -138,9 +136,7 @@ auto PricingSpfa::generateColumns() const noexcept -> int {
 }
 
 auto PricingSpfa::findPathRecursive(std::vector<int> &path, double pcost, std::vector<std::vector<int>> &allPaths) const noexcept -> void {
-   const auto N = numNodes();
    const auto O = sourceNode();
-   const auto D = sinkNode();
 
    int pred = m_pred[path.back()];
    if (pred == O) {
