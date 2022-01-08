@@ -114,23 +114,24 @@ auto parseCommandline(int argc, char **argv) noexcept -> CmdParm {
 
 auto solveCompactModel(const CmdParm &parm, const Instance &inst) noexcept -> int {
    unique_ptr <ModelCbc> compact;
-   
    cout << "Solution method of choice: compact formulation (Coin-OR CBC)\n";
   
-   auto mem = getMemoryUsageKb();
+   // Builds the model, recording elapsed time and memory consumption.
    Timer tm;
    tm.start();
-
+   auto mem = getMemoryUsageKb();
    compact.reset(new ModelCbc(inst));
    double buildTime = tm.elapsed();
-
-   tm.start();
-   compact->writeLp("compact.lp");
-   double writeTime = tm.elapsed();
    double memMB = (getMemoryUsageKb()-mem)/1024.0;
 
+   // Exports the model as a LP file, and computes the time spent in the operation.
+   tm.start();
+   compact->writeLp("compact.lp");
+   double writeTime = tm.elapsed();  
+
+   // Prints some useful information.
    cout << "Building the model took " << buildTime << " sec.\n";
-   cout << "Memory consumed by the model: " << memMB << " MB.\n";
+   cout << "Memory consumed by the model: " << memMB << " MB\n";
    cout << "Compact model written to 'compact.lp'.\n";
    cout << "Time spent writing file: " << writeTime << " sec.\n";
    
@@ -139,12 +140,14 @@ auto solveCompactModel(const CmdParm &parm, const Instance &inst) noexcept -> in
 
 auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -> int {
    // Uses smart pointers to hold the implementation of solution methods.
+   // These automatically release all memory and any other resources when the 
+   // objects go out of the scope (i.e., when this function returns).
    unique_ptr <CgMasterBase> master;
    vector<unique_ptr<CgPricingBase>> pricing;
-
-   // Timer for computing elapsed time while buildining the models.
-   Timer tm;
    cout << "Solution method of choice: column generation\n";
+
+   // Timer for computing elapsed time while building the models.
+   Timer tm;   
 
    // Creates the master problem.
    const auto masterImpl = parm["master"].as<string>();
@@ -159,14 +162,16 @@ auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -
       return EXIT_FAILURE;
    }
    cout << "Solver: " << master->getSolverName() << "\n";
-   cout << "Time spent: " << tm.elapsed() << " sec\n";
-   cout << "Current memory usage: " << setprecision(2) << getMemoryUsageKb()/1024.0 << " MB\n";
+   cout << "Build time: " << tm.elapsed() << " sec\n";
+   cout << "Current memory usage: " << fixed << setprecision(2) << getMemoryUsageKb()/1024.0 << " MB\n";
 
+   // Checks whether the option for import columns from a text file was set.
    if (parm.count("import-cols") != 0) {
       int nc = master->importColumns(parm["import-cols"].as<string>().c_str());
       cout << "Imported " << nc << " columns from " << parm["import-cols"].as<string>() << ".\n";
    }
 
+   // Parses the parameter of max-paths.
    const int maxPaths = parm["max-paths"].as<int>();
    if (maxPaths <= 0) {
       cout << "Parameter --max-paths need to be >= 1.\n";
@@ -178,21 +183,17 @@ auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -
    const auto pricingImpl = parm["pricing"].as<string>();
    tm.start();
    cout << "\nBuilding pricing subproblems.\n";
-   string warnMsg = "";
+   bool pricingPathControl = true;
    for (int k = 0; k < inst.numDepots(); ++k) {
       if (pricingImpl == "spfa") {
          pricing.emplace_back(make_unique<PricingSpfa>(inst, *master, k, maxPaths == 1));
-         if (maxPaths > 1) {
-            warnMsg = "Fine-grained control of path generation not available.";
-         }
+         pricingPathControl = false;
       } else if (pricingImpl == "bellman") {
          pricing.emplace_back(make_unique<PricingBellman>(inst, *master, k, maxPaths == 1));
-         if (maxPaths > 1) {
-            warnMsg = "Fine-grained control of path generation not available.";
-         }
+         pricingPathControl = false;
       } else if (pricingImpl == "glpk") {
          pricing.emplace_back(make_unique<PricingGlpk>(inst, *master, k, maxPaths));
-         maxThreads = 1; // To circumvent problems with GLPK and multi-threading apps
+         maxThreads = 1; // To circumvent problems with GLPK and multi-threading applications
       } else if (pricingImpl == "cbc") {
          pricing.emplace_back(make_unique<PricingCbc>(inst, *master, k, maxPaths));
       } else if (pricingImpl == "cplex") {
@@ -204,12 +205,18 @@ auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -
    }
    tm.finish();
    cout << "Solver: " << pricing.front()->getSolverName() << "\n";
-   if (!warnMsg.empty()) {
-      cout << "WARNING: " << warnMsg << "\n";
+   if (maxPaths == 1) {
+      cout << "Generating a single path per subproblem.\n";
+   } else {
+      if (pricingPathControl)
+         cout << "Generating up to " << maxPaths << " paths per subproblem.\n";
+      else
+         cout << "WARNING: Fine-grained control of paths unavailable for the pricing solver.\n";
    }
-   cout << "Time spent: " << tm.elapsed() << " sec\n";
-   cout << "Current memory usage: " << setprecision(2) << getMemoryUsageKb() / 1024.0 << " MB\n"; 
+   cout << "Build time: " << tm.elapsed() << " sec\n";
+   cout << "Current memory usage: " << fixed << setprecision(2) << getMemoryUsageKb() / 1024.0 << " MB\n"; 
    
+   // Variables that store the progress of the optimization.
    bool masterRelax = true;
    double timeMaster = 0.0, timePricing = 0.0;
    double rmpObj = 0.0, lbObj = 0.0;
@@ -256,11 +263,12 @@ auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -
       }
    };
 
+   // CG - main loop
    cout << "\nStarting column generation.\n";
    tm.start();
    tmPrint.start();
    int iter = 0;
-   for (iter = 0; iter < 5000 and !MdvspSigInt; ++iter) {
+   for (iter = 0; !MdvspSigInt; ++iter) {
       Timer tmInner;
       tmInner.start();
       rmpObj = master->solve();
@@ -279,6 +287,7 @@ auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -
       }
       timePricing = tmInner.elapsed();
 
+      // Test for negative reduced costs and add columns into RMP.
       for (size_t i = 0; i < pricing.size(); ++i) {
          auto &sp = pricing[i];
          const auto pobj = sp->getObjValue();
@@ -289,12 +298,10 @@ auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -
          }
       }
       
+      // Prints a log row.
       printLog(iter);
-
-      // double mem = getMemoryUsageKb()/1024.0;
-      // cout.precision(12);
-      // cout << "@>>> Iter: " << iter << "   Elapsed: " << tm.elapsed() << " sec   Primal: " << rmp << "   Dual: " << lbPricing << "   NC: " << master->numColumns() << "   Mem: " << mem << "\n";
       
+      // Check for stopping criterion.
       if (!newCols) {
          if (masterRelax) {
             masterRelax = false;
@@ -307,6 +314,8 @@ auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -
       }
       maxThreads = omp_get_max_threads();
    }
+   
+   // Does a last print to ensure the correct output to the user.
    printLog(iter, true);
    const auto totalTime = tm.elapsed();
 
@@ -314,14 +323,16 @@ auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -
    master->solve();
 
    if (MdvspSigInt) {
-      cout << "WARNING: Optimization was interrupted. RMP relaxation likely to not be optimal.\n";
+      cout << "\n\nWARNING: Optimization was interrupted. RMP relaxation likely to not be optimal.\n";
+   } else {
+      cout << "\n\n";
    }
-   cout << "\nValue of optimal RMP relaxation: " << master->getObjValue() << "\n";
+   cout << "Value of RMP relaxation: " << master->getObjValue() << "\n";
    cout << "Total time spent: " << totalTime << " sec\n";
    cout << "Current memory consumption: " << setprecision(2) << getMemoryUsageKb()/1024.0 << " MB\n";
 
    master->writeLp("masterFinal.lp");
-   cout << "RMP exported to 'masterFinal.lp'.\n";
+   cout << "\nRMP exported to 'masterFinal.lp'.\n";
    master->exportColumns("cols.txt");
    cout << "RMP columns exported to 'cols.txt'.\n";  
 
