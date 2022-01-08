@@ -14,12 +14,18 @@ add_definitions(
 
 include_directories(src)
 
-set(GLPK_PREFIX /home/alberto/work/glpk-5.0/prefix)
-message("-- Using as GLPK prefix: ${GLPK_PREFIX}")
-include_directories(${GLPK_PREFIX}/include)
-link_directories(${GLPK_PREFIX}/lib)
+if(NOT GLPK_PREFIX)
+   message("-- Falling GLPK_PREFIX back to defaults in /usr")
+   set(GLPK_PREFIX "/usr")
+else()
+   message("-- Using as GLPK prefix: ${GLPK_PREFIX}")
+   include_directories(${GLPK_PREFIX}/include)
+   link_directories(${GLPK_PREFIX}/lib)
+endif()
 
-set(CPLEX_PREFIX /home/alberto/.local/ibm/ILOG/CPLEX_Studio201/)
+if(NOT CPLEX_PREFIX)
+   message(FATAL_ERROR "CPLEX installation not specified.")
+endif()
 message("-- Using as CPLEX prefix: ${CPLEX_PREFIX}")
 include_directories(
    ${CPLEX_PREFIX}/cplex/include 
