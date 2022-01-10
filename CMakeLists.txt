@@ -10,7 +10,13 @@ add_definitions(
    -fopenmp
    -Wno-deprecated-copy
    -Wno-deprecated-declarations
+   -march=native
+   -mtune=native
+   -flto
 )
+
+set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+set(CMAKE_CXX_FLAGS_DEBUG "-Og -ggdb3")
 
 include_directories(src)
 
@@ -48,6 +54,7 @@ add_executable(main
    src/colgen/CgMasterBase.cpp
    src/colgen/CgMasterGlpk.cpp
    src/colgen/CgMasterCplex.cpp
+   src/colgen/CgMasterClp.cpp
 
    # Implementation of pricing algorithms.
    src/colgen/CgPricingBase.cpp
@@ -91,4 +98,7 @@ target_link_libraries(main
 
    # Boost program-options
    -lboost_program_options
+
+   # Enables link-time optimization
+   -flto
 )

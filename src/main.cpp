@@ -5,6 +5,7 @@
 #include "colgen/CgMasterBase.h"
 #include "colgen/CgMasterCplex.h"
 #include "colgen/CgMasterGlpk.h"
+#include "colgen/CgMasterClp.h"
 #include "colgen/PricingCplex.h"
 #include "colgen/PricingBellman.h"
 #include "colgen/PricingSpfa.h"
@@ -85,7 +86,7 @@ auto parseCommandline(int argc, char **argv) noexcept -> CmdParm {
 
       ("master,m", po::value<string>()->default_value("glpk"), "defines the implementation "
       "backend to use while solving the restricted relaxed master problem. Only has effect when "
-      "the solution method is cg. Accepted values: glpk, cplex")
+      "the solution method is cg. Accepted values: glpk, cplex, clp")
 
       ("pricing,p", po::value<string>()->default_value("spfa"), "defines the implementation "
       "backend to use while solving the pricing subproblems. Only has effect when "
@@ -154,8 +155,10 @@ auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -
    cout << "\nBuilding master problem.\n";
    if (masterImpl == "glpk") {
       master.reset(new CgMasterGlpk(inst));
-   } else  if (masterImpl == "cplex") {
+   } else if (masterImpl == "cplex") {
       master.reset(new CgMasterCplex(inst));
+   } else if (masterImpl == "clp") {
+      master.reset(new CgMasterClp(inst));
    } else {
       cout << "Unknown implementation for RMP solver: " << masterImpl << ".\n";
       return EXIT_FAILURE;
@@ -271,7 +274,7 @@ auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -
       Timer tmInner;
       tmInner.start();
       rmpObj = master->solve();
-      timeMaster = tmInner.elapsed();
+      timeMaster += tmInner.elapsed();
 
       // Solves the pricing subproblems.
       // This step can be done in parallel, with some observation when
@@ -286,7 +289,7 @@ auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -
          // All the work of updating subproblem obj is managed internally.
          sp->solve();
       }
-      timePricing = tmInner.elapsed();
+      timePricing += tmInner.elapsed();
 
       // Test for negative reduced costs and add columns into RMP.
       for (size_t i = 0; i < pricing.size(); ++i) {
@@ -311,6 +314,9 @@ auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -
             cout << "***** CONVERTING MASTER RELAXATION. *****\n";
             master->setAssignmentType('E');
          } else {
+            // Does a last print to ensure the correct output to the user.
+            printLog(iter, true);
+
             cout << "\nNo new columns generated.\nStopping the algorithm.\n";
             break;
          }
@@ -322,9 +328,6 @@ auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -
       // multiple independent problems in parallel.
       maxThreads = omp_get_max_threads();
    }
-   
-   // Does a last print to ensure the correct output to the user.
-   printLog(iter, true);
    const auto totalTime = tm.elapsed();
 
    // Final solve to guarantee consistency.
