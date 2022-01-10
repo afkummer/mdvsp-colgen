@@ -63,7 +63,6 @@ auto Instance::numDepots() const noexcept -> int {
 }
 
 auto Instance::numTrips() const noexcept -> int {
-   // return 50;
    return m_numTrips;
 }
 

@@ -195,34 +195,3 @@ auto PricingCplex::findPathRecursive(std::vector<int> &path, double pcost, std::
       }
    }
 }
-
-// auto PricingCplex::getPathRecursive(std::vector<int> &path, std::vector<std::vector<int>> &allPaths) const noexcept -> void {
-//    const auto N = m_inst->numTrips() + 2;
-//    const auto O = N - 2;
-//    const auto D = N - 1;
-
-//    if (path.back() == O) {
-//       for (int i = 0; i < m_inst->numTrips(); ++i) {
-//          if (auto col = m_x[O][i]; col.getImpl() and m_cplex.getValue(col) >= 0.5) {
-//             path.push_back(i);
-//             getPathRecursive(path, allPaths);
-//             path.pop_back();
-//          }
-//       }
-//    } else {
-
-//       if (auto col = m_x[path.back()][D]; col.getImpl() && m_cplex.getValue(col) >= 0.5) {
-//          path.push_back(D);
-//          allPaths.push_back(path);
-//          path.pop_back();
-//       }
-
-//       for (auto &p: m_inst->deadheadSuccAdj(path.back())) {
-//          if (auto col = m_x[path.back()][p.first]; m_cplex.getValue(col) >= 0.5) {
-//             path.push_back(p.first);
-//             getPathRecursive(path, allPaths);
-//             path.pop_back();
-//          }
-//       }
-//    }
-// }

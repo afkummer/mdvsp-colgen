@@ -83,11 +83,6 @@ auto CgMasterClp::setAssignmentType(char sense) noexcept -> void {
    for (int i = 0; i < m_inst->numTrips(); ++i) {
       m_lpSolver->setRowBounds(i, 1.0, ub);
    }
-
-   // // Changing these constraints may cause change in the basis feasibility.
-   // // Is this case, we need to call this method again, otherwise the
-   // // solver may get stuck.
-   // m_lpSolver->initialSolve();
 }
 
 auto CgMasterClp::addColumn() noexcept -> void {
@@ -97,20 +92,15 @@ auto CgMasterClp::addColumn() noexcept -> void {
    vector<double> coeffs;
    char buf[128];
 
-   // cout << "New col: \n";
-
    for (auto i: m_newcolPath) {
       rows.push_back(i);
       coeffs.push_back(1.0);
-      // cout << "   trip(" << i << ") -- row: " << m_lpSolver->getRowName(i) << "\n";
    }
 
    {
       rows.push_back(m_newcolDepot+m_inst->numTrips());
       coeffs.push_back(1.0);
    }
-
-   // cout << "   Cost(" << m_newcolCost << ")\n\n\n";
 
    snprintf(buf, sizeof buf, "path#%d#%d", m_newcolDepot, numColumns());
    m_lpSolver->addCol(rows.size(), rows.data(), coeffs.data(), 0.0, COIN_DBL_MAX, m_newcolCost, buf);
