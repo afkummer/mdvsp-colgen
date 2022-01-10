@@ -38,10 +38,12 @@ CgMasterCplex::CgMasterCplex(const Instance &inst): CgMasterBase(inst) {
 
    // Adds the dummy solution.
    for (int i = 0; i < m_inst->numTrips(); ++i) {
-      m_newcolCost = 1e7;
-      m_newcolPath.push_back(i);
-      addColumn();
-      m_newcolPath.clear();
+      IloNumColumn col = m_obj(1e7);
+      col += m_range[i](1.0);
+      snprintf(buf, sizeof buf, "dummy#%d", i);
+
+      IloNumVar path = IloNumVar(col, 0.0, IloInfinity, IloNumVar::Float, buf);
+      col.end();
    }
 
    m_env.setOut(m_env.getNullStream());
@@ -95,10 +97,13 @@ auto CgMasterCplex::setAssignmentType(char sense) noexcept -> void {
 }
 
 auto CgMasterCplex::addColumn() noexcept -> void {
+   assert(m_newcolDepot != -1);
+   assert(!m_newcolPath.empty());
    IloNumColumn col = m_obj(m_newcolCost);
    for (int i: m_newcolPath) {
       col += m_range[i](1.0);
    }
+   col += m_range[m_newcolDepot+m_inst->numTrips()](1.0);
 
    char buf[128];
    if (m_newcolDepot == -1) {

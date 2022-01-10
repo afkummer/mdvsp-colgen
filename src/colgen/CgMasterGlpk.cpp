@@ -96,6 +96,8 @@ auto CgMasterGlpk::setAssignmentType(char sense) noexcept -> void {
 }
 
 auto CgMasterGlpk::addColumn() noexcept -> void {
+   assert(m_newcolDepot != -1);
+   assert(!m_newcolPath.empty());
    char buf[128];
    snprintf(buf, sizeof buf, "path#%d#%d", m_newcolDepot, numColumns());
 

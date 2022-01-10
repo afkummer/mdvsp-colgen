@@ -7,7 +7,9 @@
 using namespace std;
 
 CgMasterBase::CgMasterBase(const Instance &inst): m_inst(&inst) {
-   // Empty
+   m_newcolDepot = -1;
+   m_newcolCost = std::numeric_limits<double>::infinity();
+   m_newcolLastTrip = -1;
 }
 
 CgMasterBase::~CgMasterBase() {

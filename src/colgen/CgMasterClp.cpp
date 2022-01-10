@@ -91,6 +91,8 @@ auto CgMasterClp::setAssignmentType(char sense) noexcept -> void {
 }
 
 auto CgMasterClp::addColumn() noexcept -> void {
+   assert(m_newcolDepot != -1);
+   assert(!m_newcolPath.empty());
    vector<int> rows;
    vector<double> coeffs;
    char buf[128];
