@@ -43,6 +43,8 @@ CgMasterCplex::CgMasterCplex(const Instance &inst): CgMasterBase(inst) {
       snprintf(buf, sizeof buf, "dummy#%d", i);
 
       IloNumVar path = IloNumVar(col, 0.0, IloInfinity, IloNumVar::Float, buf);
+      // For now, we do nothing with these artificial vars.
+      (void) path;
       col.end();
    }
 
@@ -50,6 +52,8 @@ CgMasterCplex::CgMasterCplex(const Instance &inst): CgMasterBase(inst) {
    m_env.setWarning(m_env.getNullStream());
    m_cplex.setOut(m_env.getNullStream());
    m_cplex.setWarning(m_env.getNullStream());
+   
+   m_cplex.setParam(IloCplex::IntParam::Threads, 1);
 }
 
 CgMasterCplex::~CgMasterCplex() {

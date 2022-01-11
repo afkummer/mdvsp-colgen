@@ -140,6 +140,7 @@ auto PricingCbc::solve() noexcept -> double {
    
    m_lpSolver->setLogLevel(0);
    m_model->setLogLevel(0);
+   m_model->setNumberThreads(1);
    
    m_model->branchAndBound();
    return m_model->getObjValue();

@@ -97,6 +97,8 @@ PricingCplex::PricingCplex(const Instance &inst, CgMasterBase &master, const int
    m_env.setWarning(m_env.getNullStream());
    m_cplex.setOut(m_env.getNullStream());
    m_cplex.setWarning(m_env.getNullStream());
+
+   m_cplex.setParam(IloCplex::IntParam::Threads, 1);
 }
 
 PricingCplex::~PricingCplex() {

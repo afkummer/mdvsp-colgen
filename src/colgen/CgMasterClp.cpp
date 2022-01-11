@@ -46,6 +46,7 @@ CgMasterClp::CgMasterClp(const Instance &inst): CgMasterBase(inst) {
 
    // Configures the solver to be quiet.
    m_lpSolver->setLogLevel(0);
+   m_lpSolver->getModelPtr()->setNumberThreads(1);
    m_lpSolver->initialSolve();
 }
 
