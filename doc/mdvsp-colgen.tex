@@ -29,6 +29,12 @@
 % Packages to allow rotating PDF pages.
 \usepackage{pdflscape}
 
+% Packages for managing citation styles.
+\usepackage[round]{natbib}
+
+% Package for managing caption formats.
+\usepackage{caption}
+
 % Packages for typesetting pseudo-code.
 \usepackage[linesnumbered,ruled,lined]{algorithm2e}
 \SetArgSty{textnormal}
@@ -65,6 +71,7 @@
 \maketitle
 
 \section{Problem definition}
+\label{section:problem-definition}
 
 Let $T$ be a set of timetabled tasks and $K$ the set of available depots in the problem. The Multiple Depot Vehicle Scheduling Problem (MDVSP) consists of assigning each task $i \in T$ to some vehicle of the problem, taking into account the number of vehicles $v_k$ available in each depot $k \in K$. A solution comprises a path for each scheduled vehicle, starting on it origin depot, performing a feasible sequence of tasks, and then returning to its depot at the end. As the depots' capacities are usually large enough, it is allowed--and expected--to some vehicles to remain unscheduled.
 
@@ -138,11 +145,12 @@ The objective function (\ref{reform2:obj}) minimizes the cost of selected paths 
 
 \subsection{Simplifying the path-flow model}
 
-In practice, the parameter $x_{pij}$ is handled implicitly in the implementation of column generation-based algorithms. Thus, we can express the formulation in a more cleaner way by doing some simplifications. The objective function (\ref{reform2:obj}) can be rewritten as in (\ref{reform3:obj}) by doing
+In practice, the parameter $x_{pij}$ is handled implicitly in the implementation of column generation-based algorithms (CG). Thus, we can express the MP in a more cleaner way by doing some simplifications. The objective function (\ref{reform2:obj}) can be rewritten as in (\ref{reform3:obj}) by doing
 \begin{align}
    c_p~=~\sum_{(i,j) \in A^k} c_{ij} x_{pij}. \notag
 \end{align}
-Remark that, by definition, all the paths of $\Omega_k$ are \textit{well-formed}. This way, each path $\theta_p \in \Omega_k$ contains exactly one \textit{pull-out} arc departing from depot $k \in K$, and we can rewrite (\ref{reform2:depot-cap}) as in (\ref{reform3:depot-cap}). By the same reason, a vertex $i \in T$ appears at most once, or never appears in path $p \in \Omega_k$. Thus, we so can rewrite (\ref{reform2:assign}) as in (\ref{reform3:assig}) by simplifying
+Remark that, by definition, all the paths of $\Omega_k$ are \textit{well-formed}. This way, %each path $\theta_p \in \Omega_k$ contains exactly one \textit{pull-out} arc departing from depot $k \in K$, and
+we can rewrite (\ref{reform2:depot-cap}) as in (\ref{reform3:depot-cap}). By the same reason, a vertex $i \in T$ appears at most once, or never appears in path $p \in \Omega_k$. Thus, we so can rewrite (\ref{reform2:assign}) as in (\ref{reform3:assig}) by simplifying
 \begin{align}
    & a_{ip} = \sum_{j:(i,j) \in A^k} x_{pij} & & \forall i \in T, k \in K, p \in \Omega_k. \notag
 \end{align}
@@ -164,7 +172,7 @@ Naturally, $a_{ip} \in \{0,1\}$. Constraints (\ref{reform2:link-arcs}--\ref{refo
 
 \section{Set partitioning formulation for the MDVSP}
 
-Although valid for solving the MDVSP, we introduced the so-called path-flow formulation mainly to introduce the master problem for the reader. In the literature of the problem, the papers normally propose the following \textit{set partitioning} formulation as the master problem for the MDVSP.
+Although being valid for solving the MDVSP, we introduced the so-called path-flow formulation mainly to introduce the master problem for the reader. In the literature of the problem, the papers normally propose the following \textit{set partitioning} formulation as the master problem for the MDVSP.
 
 \noindent
 \begin{minipage}{\linewidth}
@@ -181,13 +189,13 @@ Although valid for solving the MDVSP, we introduced the so-called path-flow form
 
 \vspace{12pt}
 
-As the reader may notice, this model is almost the same as (\ref{reform3:obj}--\ref{reform3:x-dom}) with some constraints dropped. By relaxing (\ref{reform3:link-arcs}), the domain constraints (\ref{reform3:x-dom}) were also dropped, and the integer property of the model migrated to variables $\theta_p$. The caveat of this formulation is that--at least from the perspective of mathematical programming, it became impossible to recover the path structure from the solution. In practice, the structure of the paths is stored elsewhere in the implementation so this problem can be easily mitigated. Furthermore, this simpler model is much smaller both in number of constraints and variables, so it requires less memory and (hopefully) less processing power to be solved.
+As the reader may notice, this model is almost the same as (\ref{reform3:obj}--\ref{reform3:x-dom}) with some constraints dropped. By relaxing (\ref{reform3:link-arcs}), the domain constraints (\ref{reform3:x-dom}) were also dropped, and the integer property of the model migrated to variables $\theta_p$. The caveat of this formulation is that--at least from the perspective of mathematical programming, it became impossible to recover the path structure from the solution. In practice, the structure of the paths is stored elsewhere in the implementation so this problem can be easily mitigated. Furthermore, this simpler model is much smaller both in number of constraints and variables, so it requires less memory and (hopefully) less processing effort to be solved.
 
-Back to the context of column generation, our main objective is to solve the problem more efficiently. The compact formulation (\ref{model:compact-obj}--\ref{model:compact:domain}) usually applies to very small problems with up to 500 tasks. In practice, instances of MDVSP are huge and comprise hundreds to thousands of tasks, and dozen of depots. The size of the problems affects even more the master formulation, leading to a prohibitively large set $\Omega_k$ that is impossible to enumerate explicitly. The ``trick'' there is that we can enumerate the set of feasible paths in an \textit{on-demand} fashion, taking advantage of the properties of linear programming for such. For that, we first relax the domain constraints (\ref{model:sp:domain}) as $\theta_p \geqslant 0$, which leads to the so-called \textit{relaxed master problem} (RMP). Secondly, we create an almost-empty RMP comprising only an \textit{artificial set of expensive columns}. These initial columns have a very high cost associated, and their solely purpose is to satisfy the assignment constraints (\ref{model:sp:assignment}). Thus, we have as many of these columns as assignment constraints in the RMP. A couple of new names appear here: this very small RMP is called \textit{restricted relaxed master problem} (RRMP); And the strategy of initializing the RRMP with these artificial columns is called as the big-\textit{M} strategy.
+Back to the context of column generation, our main objective is to solve the problem more efficiently. The compact formulation (\ref{model:compact-obj}--\ref{model:compact:domain}) usually applies to very small problems with up to 500 tasks. In practice, instances of MDVSP are huge and comprise hundreds to thousands of tasks, and dozen of depots. The size of the problems affects even more the master formulation, leading to a prohibitively large set $\Omega_k$ that is impossible to enumerate explicitly. The ``trick'' there is that we can enumerate the set of feasible paths in an \textit{on-demand} fashion, taking advantage of the properties of linear programming for such. For that, we first relax the domain constraints (\ref{model:sp:domain}) as $\theta_p \geqslant 0$, which leads to the so-called \textit{relaxed master problem} (RMP). Secondly, we create an almost-empty RMP comprising only an \textit{artificial set of expensive columns}. These initial columns have a very high cost associated, and their solely purpose is to satisfy the assignment constraints~(\ref{model:sp:assignment}). We have as many of these columns as assignment constraints in the RMP. A couple of new names appear here: this very small RMP is called \textit{restricted relaxed master problem} (RRMP); And the strategy of initializing the RRMP with these artificial columns is called as the big-\textit{M} strategy.
 
 In addition to the RRMP, we need some ``external procedure''
 % that can use the dual information associated to the RRMP to enumerate new promising paths.
-to enumerate the set of feasible paths \textit{on-demand}. In the context of the MDVSP, this external procedure consists of finding a path within the network problem associated to each depot, using for that a modified cost structure. If a promising new path could be generated, we then insert it into the RRMP and the process repeats. Recall the dual values associated with the constraints from the RMP. According to the duality of the linear programming, the RMP has a dual solution defined according the values, say $\pi_i$ and $\beta_k$, associated with constraints (\ref{model:compact:assignment}) and (\ref{model:compact:depot-cap}), respectively. These values are used to modify the cost of the decision variables in the underlying network flow subproblems as follows. In the MDVSP, $m_i = 1$ because the multipliers of $\theta_p$ in (\ref{model:sp:assignment}) are $1$. $n_k = 1$ for the same reason, according to the multipliers of (\ref{model:sp:depot-cap}).
+to enumerate the set of feasible paths \textit{on-demand}. In the context of the MDVSP, this external procedure consists of finding a path within the network flow problem associated to each depot, using for that a modified cost structure. If a promising new path could be generated, we then insert it into the RRMP and the process repeats. Recall the dual values associated with the constraints from the RMP. According to the duality of the linear programming, the RRMP has a dual solution defined according the values, say $\pi_i$ and $\beta_k$, associated with constraints (\ref{model:compact:assignment}) and (\ref{model:compact:depot-cap}), respectively. These values are used to modify the cost of the decision variables in the underlying network flow subproblems as follows. In the MDVSP, $m_i = 1$ because the multiplying coefficients of $\theta_p$ in (\ref{model:sp:assignment}) are $1$. $n_k = 1$ for the same reason, according to the coefficients of (\ref{model:sp:depot-cap}).
 \begin{align}
    \hat{c}^k_{ij} =
    \begin{cases}
@@ -197,9 +205,9 @@ to enumerate the set of feasible paths \textit{on-demand}. In the context of the
 \end{align}
 If we could find a new path using this modified cost structure, then
 \begin{align}
-   \bar{c}_p = \sum_{(i,j) \in A^k} \hat{c}^k_{ij}
+   \bar{c}_p = \sum_{(i,j) \in A^k} \hat{c}^k_{ij} x^k_{ij}
 \end{align}
-defines the \textit{negative reduced cost} associated with this new path $p$. Thus, our objective is to find the path the most negative reduced cost--which is also the path that most improves the primal solution of the RRMP. This way, for each depot $k \in K$, we define the shortest path problem below.
+defines the \textit{negative reduced cost} associated with this new path $p$. Thus, our objective is to find the path the most negative reduced cost\footnote{In practice, any path with negative reduced cost suffices, except to prove the convergence of the RRMP.}--which is also the path that most improves the primal solution of the RRMP. This way, for each depot $k \in K$, we define the shortest path problem below. For consistency, we kept the index $k$ in the decision variables.
 
 \noindent
 \begin{minipage}{\linewidth}
@@ -222,7 +230,7 @@ defines the \textit{negative reduced cost} associated with this new path $p$. Th
 Having the RRMP and some algorithm to solve the subproblems on hand, we can then apply the following iterative algorithm to find the optimal solution for the RRMP.
 
 \begin{algorithm}
-   \KwIn{Set $K$, and their associated graphs $G^k$}
+   \KwIn{Sets $K$ and $T$, and their associated graphs $G^k$}
    \KwOut{Value associated with the optimal RRMP}
    $\mathit{RRMP} \gets \mathtt{CreateMasterProblem()}$\;
    $\mathit{SP} \gets \mathtt{CreatePricingSubproblems}()$\;
@@ -232,9 +240,11 @@ Having the RRMP and some algorithm to solve the subproblems on hand, we can then
       $z = \mathtt{SolveMasterProblem}(\mathit{RRMP})$\;
       $(\pi, \beta) = \mathtt{GetDualValues}(\mathit{RRMP})$\;
       $\mathit{newCols} \gets \mathtt{false}$\;
+      \BlankLine
       \ForEach{$k \in K$} {
          $\mathtt{UpdateObjectiveFunction}(\mathit{SP}_k)$\;
          $r \gets \mathtt{SolvePricingSubproblem}(\mathit{SP}_k)$\;
+         \BlankLine
          \If{$r \leqslant -0.001$}{
             $\mathit{newCols} \gets \mathtt{true}$\;
             $\theta \gets \mathtt{ExtractPath}(\mathit{SP}_k)$\;
@@ -250,6 +260,102 @@ The algorithm starts by creating the RRMP and the pricing subproblem (lines 1 an
 
 Column generation procedures allows some freedom regarding its implementation. A very simple modification consists of moving the operations of lines 6 and 7 to inside of the loop of line 9. This way, each time a pricing is solved, it already considers the most up-to-dated dual information from the RRMP. This modification can be interesting in scenarios which solving the RRMP is not very hard, and when there is some ``redundancy'' of columns generated for different pricing subproblems--i.e., when a path returned by subproblem $k'$ is also a valid path to subproblem $k''$, which is the case of the MDVSP. Another interesting variation of such algorithm consists of returning \textit{multiple paths} in a single call to \texttt{SolvePricingSubproblem}, which can potentially speedup the algorithm but also may cause cycling problems when not properly implemented. A final word regarding algorithmic variants is the following: the best approach varies from problem to problem (sometimes also according the instance), and the best-performing variant could only be determined through experimentation.
 
+\section{Implementing a CG-based algorithm for the MDVSP}
 
+This section focuses in the implementation details for a column generation-based algorithm for the Multiple Depot Vehicle Scheduling Problem. In our experiments, we are interested in implementing several variations of the algorithm, and to distill some general considerations from our experiments. For that, we experimented with several linear programming solvers available in the open source software initiative, and a state-of-art commercial solver. Table \ref{table:solvers} indicates the optimization packages we tested, their licenses, and version.
+
+\begin{table}[!htb]
+   \centering
+   \caption{Overview of the tested solvers.}
+   \label{table:solvers}
+   \begin{tabular}{llll}
+      \toprule
+      Solver & Version & License & Applicability\\
+      \midrule
+      GNU GLPK & 5.0 & GNU GPL 3 & LP, MILP\\
+      Coin-OR CLP & 1.17.5 & EPL 2.0 & LP\\
+      Coin-OR CBC & 2.10.3 & EPL 2.0 & LP, MILP, QP\\
+      IBM ILOG CPLEX & 20.1.0.0 & Proprietary & LP, MILP, QP, MO\\
+      \bottomrule
+   \end{tabular}
+   \captionsetup{format = hang, width=0.9\textwidth, justification=centering}
+   \caption*{
+      \footnotesize
+      \textbf{LP:} Linear programming problems; \textbf{MILP:} Mixed integer-linear programming \\ problems; \textbf{QP:} Quadratic problems; \textbf{MO:} Multi-objective problems.
+   }
+\end{table}
+
+These software were primarily used to solve RRMP problems, but they can also be applied in the pricing step. Despite that, the structure of the MDVSP has some important property that allows us to apply specific network flow algorithms when solving these subproblems. Recall the set $T$ of tasks to be scheduled, and the compatibility between tasks we discussed in Section \ref{section:problem-definition}. Consider two tasks $i \neq j \in T$. If these tasks are \textit{compatible}, then we can either schedule $i$ following $j$, or $j$ following $i$. As an effect, this property is enough to guarantee that there is no cycles within the graphs $G^K=(V^k, A^k), k \in K$. Thus, we can apply any shortest path algorithm to solve the pricing subproblems for the MDVSP, as long as such an algorithm can deal with negative arc cost. We experimented with the well-known \textit{Bellman-Ford-Moore} (BF) algorithm \citep{bang2008-bellman-ford-moore}, and its slightly variation known as \textit{Shorted Path Faster Algorithm} (SPFA) which seems to be more efficient with sparse graphs \citep{fanding1994-spfa}.
+
+Considering the software and algorithms we had available, we can devise in total 15 distinct CG implementations for the MDVSP using any of \{GLPK, CLP, CPLEX\} for solving the RRMP, and any of \{GLPK, CLP, CBC, CPLEX, BF, SPFA\} for the pricing subproblems. For writing purpose, we represent each of the 15 combinations in the format ``\textit{x.y}'' where \textit{x} represents the algorithm we applied to solve the relaxed RMP, and \textit{y} represents the algorithm applied to solve the subproblems. E.g., ``GLPK.SPFA'' indicates that we used GNU GLPK for solving the RRMP, and the SPFA for solving the pricing.
+
+\begin{landscape}
+
+\begin{table}[!htb]
+   \footnotesize
+   \caption{Solving time for different strategies for linear relaxation.}
+   \centering
+   \begin{tabular}{rrrrrrrrr}
+      \toprule
+
+      \multirow{2}{*}{Instance} &
+      \multicolumn{2}{c}{Compact mod.} &
+      \multicolumn{3}{c}{Bellman-Ford} &
+      \multicolumn{3}{c}{SPFA}\\
+
+      \cmidrule(lr){2-3}
+      \cmidrule(lr){4-6}
+      \cmidrule(lr){7-9}
+
+      &
+      Time (sec) & Obj &
+      Coin-OR CLP &
+      GNU GLPK &
+      CPLEX &
+      Coin-OR CLP &
+      GNU GLPK &
+      CPLEX \\
+
+      \midrule
+
+      m4n500s0 & \textbf{11.45} & \textbf{1,289,038.39} & 15.22 & 16.47 & 16.62 & 15.38 & 16.47 & 13.21 \\
+      m4n500s1 & \textbf{14.35} & \textbf{1,241,578.89} & 19.00 & 18.80 & 16.54 & 17.09 & 18.80 & 17.53 \\
+      m4n500s2 & 15.50 & \textbf{1,283,782.89} & 13.83 & 16.02 & 15.24 & 15.14 & 16.02 & \textbf{11.98} \\
+      m4n500s3 & \textbf{12.88} & \textbf{1,258,599.97} & 24.90 & 22.86 & 19.69 & 18.92 & 22.86 & 20.02 \\
+      m4n500s4 & \textbf{12.48} & \textbf{1,317,044.28} & 18.21 & 18.26 & 14.33 & 14.51 & 18.26 & 15.05 \\
+      m4n1000s0 & \textbf{95.52} & \textbf{2,515,844.10} & 117.55 & 123.80 & 138.95 & 130.78 & 123.80 & 129.21 \\
+      m4n1000s1 & \textbf{66.01} & \textbf{2,413,237.85} & 186.15 & 211.94 & 226.28 & 205.77 & 211.94 & 218.49 \\
+      m4n1000s2 & \textbf{115.23} & \textbf{2,452,756.61} & 196.32 & 197.75 & 207.73 & 172.66 & 197.75 & 222.32 \\
+      m4n1000s3 & \textbf{95.11} & \textbf{2,490,679.06} & 192.54 & 251.69 & 266.38 & 181.64 & 251.69 & 256.30 \\
+      m4n1000s4 & \textbf{74.53} & \textbf{2,519,162.02} & 213.64 & 236.17 & 260.61 & 203.34 & 236.17 & 273.46 \\
+      m4n1500s0 & \textbf{204.65} & \textbf{3,830,447.76} & 484.87 & 557.46 & 643.83 & 422.57 & 557.46 & 603.07 \\
+      m4n1500s1 & \textbf{183.43} & \textbf{3,559,044.77} & 699.38 & 928.64 & 1061.52 & 671.58 & 928.64 & 992.27 \\
+      m4n1500s2 & \textbf{160.56} & \textbf{3,649,256.82} & 493.04 & 692.43 & 777.10 & 477.49 & 692.43 & 664.47 \\
+      m4n1500s3 & \textbf{320.68} & \textbf{3,406,511.09} & 814.09 & 945.86 & 1115.00 & 762.96 & 945.86 & 1039.54 \\
+      m4n1500s4 & \textbf{277.29} & \textbf{3,566,876.06} & 509.09 & 680.89 & 747.84 & 461.24 & 680.89 & 676.83 \\
+      \midrule
+      m8n500s0 & 38.48 & \textbf{1,292,118.36} & 13.23 & 13.39 & 15.90 & 15.93 & 13.39 & \textbf{12.53} \\
+      m8n500s1 & 46.35 & \textbf{1,276,852.20} & 15.03 & 15.54 & 11.53 & 12.15 & 15.54 & 14.37 \\
+      m8n500s2 & 35.36 & \textbf{1,304,199.98} & 13.86 & 11.56 & 9.57 & 10.89 & 11.56 & \textbf{8.75} \\
+      m8n500s3 & 41.20 & \textbf{1,277,486.75} & 14.09 & 14.16 & 11.86 & 14.50 & 14.16 & \textbf{10.12} \\
+      m8n500s4 & 38.34 & \textbf{1,275,925.65} & 15.22 & 15.39 & 14.31 & 15.10 & 15.39 & \textbf{11.52} \\
+      m8n1000s0 & 275.86 & \textbf{2,421,222.38} & 165.37 & 165.71 & 180.14 & \textbf{132.83} & 165.71 & 181.75 \\
+      m8n1000s1 & 229.99 & \textbf{2,523,969.44} & 115.66 & 103.28 & 119.38 & \textbf{89.05} & 103.28 & 103.21 \\
+      m8n1000s2 & 294.85 & \textbf{2,555,728.91} & 91.64 & 107.26 & 112.41 & \textbf{86.36} & 107.26 & 107.75 \\
+      m8n1000s3 & 299.47 & \textbf{2,477,905.63} & 137.32 & 186.19 & 156.08 & \textbf{117.95} & 186.19 & 142.74 \\
+      m8n1000s4 & 313.83 & \textbf{2,497,995.91} & \textbf{120.75} & 149.75 & 146.87 & 136.14 & 149.75 & 138.65 \\
+      m8n1500s0 & 1200.73 & \textbf{3,498,972.88} & 569.44 & 668.38 & 771.51 & \textbf{496.38} & 668.38 & 736.68 \\
+      m8n1500s1 & 726.59 & \textbf{3,801,536.55} & 444.43 & 623.77 & 613.85 & \textbf{408.56} & 623.77 & 562.69 \\
+      m8n1500s2 & 845.42 & \textbf{3,603,936.24} & 415.47 & 448.00 & 538.26 & \textbf{360.76} & 448.00 & 534.65 \\
+      m8n1500s3 & 946.77 & \textbf{3,515,148.82} & \textbf{573.96} & 742.41 & 863.14 & 603.87 & 742.41 & 798.15 \\
+      m8n1500s4 & 588.98 & \textbf{3,703,845.59} & 336.20 & 382.26 & 436.43 & \textbf{282.53} & 382.26 & 416.40 \\
+      \bottomrule
+   \end{tabular}
+\end{table}
+
+\end{landscape}
+
+\bibliographystyle{plainnat}
+\bibliography{bibliography}
 
 \end{document}
