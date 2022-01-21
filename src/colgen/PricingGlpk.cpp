@@ -106,7 +106,7 @@ PricingGlpk::PricingGlpk(const Instance &inst, CgMasterBase &master, const int d
       int rowId = glp_add_rows(m_model, maxPaths);
       snprintf(buf, sizeof buf, "max_paths");
       glp_set_row_name(m_model, rowId, buf);
-      glp_set_row_bnds(m_model, rowId, GLP_UP, 0.0, 6.0);
+      glp_set_row_bnds(m_model, rowId, GLP_UP, 0.0, maxPaths);
       
       glp_set_mat_row(m_model, rowId, matCols.size() - 1, matCols.data(), matCoefs.data());
       matCols.resize(1);
