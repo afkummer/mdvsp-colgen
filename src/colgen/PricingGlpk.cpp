@@ -5,6 +5,10 @@
 #include <algorithm>
 #include <iostream>
 
+#ifdef MIP_PRICING_LP
+#pragma warning("MIP-based pricing solver with GLPK will solve LP problems.")
+#endif
+
 using namespace std;
 
 PricingGlpk::PricingGlpk(const Instance &inst, CgMasterBase &master, const int depotId, int maxPaths): 
@@ -32,11 +36,15 @@ PricingGlpk::PricingGlpk(const Instance &inst, CgMasterBase &master, const int d
    auto addVar = [&](int i, int j, double cost) {
       int colId = glp_add_cols(m_model, 1);
       glp_set_col_name(m_model, colId, buf);
-      glp_set_col_kind(m_model, colId, GLP_BV);
+      #ifdef MIP_PRICING_LP
+            glp_set_col_kind(m_model, colId, GLP_CV);
+      #else
+            glp_set_col_kind(m_model, colId, GLP_BV);
+      #endif
       glp_set_col_bnds(m_model, colId, GLP_DB, 0.0, 1.0);
       glp_set_obj_coef(m_model, colId, cost);
       m_x[i][j] = colId;
-   };   
+   };
    for (int i = 0; i < m_inst->numTrips(); ++i) {
       if (auto cost = m_inst->sourceCost(m_depotId, i); cost != -1) {
          snprintf(buf, sizeof buf, "source#%d#%d", m_depotId, i);
@@ -171,26 +179,34 @@ auto PricingGlpk::solve() noexcept -> double {
       abort();
    }
 
-   glp_iocp mipParm;
-   glp_init_iocp(&mipParm);
-   mipParm.br_tech = GLP_BR_DTH;
-   mipParm.bt_tech = GLP_BT_BPH;
-   mipParm.pp_tech = GLP_PP_ROOT;
-   mipParm.mip_gap = 1e-8;
-   // mipParm.msg_lev = GLP_MSG_ALL;
+   #ifndef MIP_PRICING_LP
+      glp_iocp mipParm;
+      glp_init_iocp(&mipParm);
+      mipParm.br_tech = GLP_BR_DTH;
+      mipParm.bt_tech = GLP_BT_BPH;
+      mipParm.pp_tech = GLP_PP_ROOT;
+      mipParm.mip_gap = 1e-8;
+      // mipParm.msg_lev = GLP_MSG_ALL;
 
-   if (glp_intopt(m_model, &mipParm) != 0) {
-      cout << "Failed to solve pricing #" << m_depotId << " as integer program.\n";
-      writeLp("problematicMip.lp");
-      cout << "Problematic model written to problematicMip.lp.\n";
-      abort();
-   }
-   
-   return glp_mip_obj_val(m_model);
+      if (glp_intopt(m_model, &mipParm) != 0) {
+         cout << "Failed to solve pricing #" << m_depotId << " as integer program.\n";
+         writeLp("problematicMip.lp");
+         cout << "Problematic model written to problematicMip.lp.\n";
+         abort();
+      }
+      
+      return glp_mip_obj_val(m_model);
+   #else
+      return glp_get_obj_val(m_model);
+   #endif
 }
 
 auto PricingGlpk::getObjValue() const noexcept -> double {
-   return glp_mip_obj_val(m_model);
+   #ifdef MIP_PRICING_LP
+      return glp_get_obj_val(m_model);
+   #else
+      return glp_mip_obj_val(m_model);
+   #endif
 }
 
 auto PricingGlpk::generateColumns() const noexcept -> int {
@@ -200,7 +216,7 @@ auto PricingGlpk::generateColumns() const noexcept -> int {
    // of reduced cost per path.
 
    for (int i = 0; i < m_inst->numTrips(); ++i) {
-      if (auto col = m_x[sourceNode()][i]; col != -1 && glp_mip_col_val(m_model, col) >= 0.98) {
+      if (auto col = m_x[sourceNode()][i]; col != -1 && colValue(col) >= 0.98) {
          vector<int> path = {i};
          double pcost = m_inst->sourceCost(m_depotId, i) - m_master->getDepotCapDual(m_depotId);
 
@@ -220,7 +236,7 @@ auto PricingGlpk::generateColumns() const noexcept -> int {
 }
 
 auto PricingGlpk::findPathRecursive(std::vector<int> &path, double pcost, std::vector<std::vector<int>> &allPaths) const noexcept -> void {
-   if (auto col = m_x[path.back()][sinkNode()]; col != -1 && glp_mip_col_val(m_model, col) >= 0.98) {
+   if (auto col = m_x[path.back()][sinkNode()]; col != -1 && colValue(col) >= 0.98) {
       double cst = pcost + (m_inst->sinkCost(m_depotId, path.back()) - m_master->getTripDual(path.back()));
       if (cst <= -0.001) {
          allPaths.push_back(path);
@@ -228,11 +244,19 @@ auto PricingGlpk::findPathRecursive(std::vector<int> &path, double pcost, std::v
    }
 
    for (const auto &p : m_inst->deadheadSuccAdj(path.back())) {
-      if (auto col = m_x[path.back()][p.first]; col != -1 && glp_mip_col_val(m_model, col) >= 0.98) {
+      if (auto col = m_x[path.back()][p.first]; col != -1 && colValue(col) >= 0.98) {
          double cst = pcost + (p.second - m_master->getTripDual(path.back()));
          path.push_back(p.first);
          findPathRecursive(path, cst, allPaths);
          path.pop_back();
       }
    }
+}
+
+auto PricingGlpk::colValue(int j) const noexcept -> double {
+   #ifdef MIP_PRICING_LP
+      return glp_get_col_prim(m_model, j);
+   #else
+      return glp_mip_col_val(m_model, j);
+   #endif
 }

@@ -29,14 +29,22 @@ PricingCbc::PricingCbc(const Instance &inst, CgMasterBase &master, int depotId, 
       if (auto cost = m_inst->sourceCost(m_depotId, i); cost != -1) {
          snprintf(buf, sizeof buf, "source#%d#%d", m_depotId, i);
          m_x[O][i] = builder.numberColumns();
-         builder.addColumn(0, nullptr, nullptr, 0.0, 1.0, cost, buf, true);         
+         #ifndef MIP_PRICING_LP
+            builder.addColumn(0, nullptr, nullptr, 0.0, 1.0, cost, buf, true);
+         #else
+            builder.addColumn(0, nullptr, nullptr, 0.0, 1.0, cost, buf, false);
+         #endif
       }
 
       // Creates sink arcs.
       if (auto cost = m_inst->sinkCost(m_depotId, i); cost != -1) {
          snprintf(buf, sizeof buf, "sink#%d#%d", m_depotId, i);
          m_x[i][D] = builder.numberColumns();
-         builder.addColumn(0, nullptr, nullptr, 0.0, 1.0, cost, buf, true);
+         #ifndef MIP_PRICING_LP
+            builder.addColumn(0, nullptr, nullptr, 0.0, 1.0, cost, buf, true);
+         #else
+            builder.addColumn(0, nullptr, nullptr, 0.0, 1.0, cost, buf, false);
+         #endif
       }
 
       // Adds all deadheading arcs.
@@ -44,7 +52,11 @@ PricingCbc::PricingCbc(const Instance &inst, CgMasterBase &master, int depotId, 
          if (auto cost = m_inst->deadheadCost(i, j); cost != -1) {
             snprintf(buf, sizeof buf, "deadhead#%d#%d", i, j);
             m_x[i][j] = builder.numberColumns();
-            builder.addColumn(0, nullptr, nullptr, 0.0, 1.0, cost, buf, true);
+            #ifndef MIP_PRICING_LP
+               builder.addColumn(0, nullptr, nullptr, 0.0, 1.0, cost, buf, true);
+            #else
+               builder.addColumn(0, nullptr, nullptr, 0.0, 1.0, cost, buf, false);
+            #endif
          }
       }
    }

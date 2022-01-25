@@ -22,7 +22,11 @@ PricingCplex::PricingCplex(const Instance &inst, CgMasterBase &master, const int
    for (int i = 0; i < N; ++i)
       m_x[i] = IloNumVarArray(m_env, N);
 
-   const auto VarTy = IloNumVar::Bool;
+   #ifndef MIP_PRICING_LP
+      const auto VarTy = IloNumVar::Bool;
+   #else 
+      const auto VarTy = IloNumVar::Float;
+   #endif
    for (int i = 0; i < m_inst->numTrips(); ++i) {
       // Creates source arcs.
       if (auto cost = m_inst->sourceCost(m_depotId, i); cost != -1) {

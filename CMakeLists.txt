@@ -18,7 +18,11 @@ add_definitions(
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 set(CMAKE_CXX_FLAGS_DEBUG "-Og -ggdb3")
 
-include_directories(src)
+if(NOT CMAKE_BUILD_TYPE)
+   set(CMAKE_BUILD_TYPE "Debug")
+   message("-- Using debug flags by default.")
+endif()
+message("-- Build type: ${CMAKE_BUILD_TYPE}")
 
 if(NOT GLPK_PREFIX)
    message("-- Falling GLPK_PREFIX back to defaults in /usr")
@@ -41,6 +45,12 @@ link_directories(
    ${CPLEX_PREFIX}/cplex/lib/x86-64_linux/static_pic 
    ${CPLEX_PREFIX}/concert/lib/x86-64_linux/static_pic
 )
+
+include_directories(src)
+
+# Uncomment the line below to solve MIP-based pricing 
+# problems as a linear program.
+add_definitions(-DMIP_PRICING_LP)
 
 add_executable(main
    # Common implementation

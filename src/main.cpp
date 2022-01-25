@@ -196,10 +196,19 @@ auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -
       } else if (pricingImpl == "glpk") {
          pricing.emplace_back(make_unique<PricingGlpk>(inst, *master, k, maxPaths));
          maxThreads = 1; // To circumvent problems with GLPK and multi-threading applications
+         #ifdef MIP_PRICING_LP
+            cout << "Solving pricing subproblems as LP.\n";
+         #endif
       } else if (pricingImpl == "cbc") {
          pricing.emplace_back(make_unique<PricingCbc>(inst, *master, k, maxPaths));
+         #ifdef MIP_PRICING_LP
+            cout << "Solving pricing subproblems as LP.\n";
+         #endif
       } else if (pricingImpl == "cplex") {
          pricing.emplace_back(make_unique<PricingCplex>(inst, *master, k, maxPaths));
+         #ifdef MIP_PRICING_LP
+            cout << "Solving pricing subproblems as LP.\n";
+         #endif
       } else {
          cout << "Unknown implementation for pricing solver: " << pricingImpl << ".\n";
          return EXIT_FAILURE;

@@ -24,4 +24,6 @@ private:
    boost::multi_array<int, 2> m_x;
 
    auto findPathRecursive(std::vector<int> &path, double pcost, std::vector<std::vector<int>> &allPaths) const noexcept -> void;
+
+   auto colValue(int j) const noexcept -> double;
 };
