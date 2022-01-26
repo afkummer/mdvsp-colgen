@@ -35,6 +35,9 @@
 % Package for managing caption formats.
 \usepackage{caption}
 
+% Package for managing appendices
+\usepackage{appendix}
+
 % Packages for typesetting pseudo-code.
 \usepackage[linesnumbered,ruled,lined]{algorithm2e}
 \SetArgSty{textnormal}
@@ -235,7 +238,6 @@ Having the RRMP and some algorithm to solve the subproblems on hand, we can then
    $\mathit{RRMP} \gets \mathtt{CreateMasterProblem()}$\;
    $\mathit{SP} \gets \mathtt{CreatePricingSubproblems}()$\;
    $\mathtt{GenerateInitialSolution}(\mathit{RRMP})$\;
-   $\mathit{newCols} \gets \mathtt{false}$\;
    \Repeat{$\mathit{newCols} = \mathtt{false}$} {
       $z = \mathtt{SolveMasterProblem}(\mathit{RRMP})$\;
       $(\pi, \beta) = \mathtt{GetDualValues}(\mathit{RRMP})$\;
@@ -285,15 +287,20 @@ This section focuses in the implementation details for a column generation-based
    }
 \end{table}
 
-These software were primarily used to solve RRMP problems, but they can also be applied in the pricing step. Despite that, the structure of the MDVSP has some important property that allows us to apply specific network flow algorithms when solving these subproblems. Recall the set $T$ of tasks to be scheduled, and the compatibility between tasks we discussed in Section \ref{section:problem-definition}. Consider two tasks $i \neq j \in T$. If these tasks are \textit{compatible}, then we can either schedule $i$ following $j$, or $j$ following $i$. As an effect, this property is enough to guarantee that there is no cycles within the graphs $G^K=(V^k, A^k), k \in K$. Thus, we can apply any shortest path algorithm to solve the pricing subproblems for the MDVSP, as long as such an algorithm can deal with negative arc cost. We experimented with the well-known \textit{Bellman-Ford-Moore} (BF) algorithm \citep{bang2008-bellman-ford-moore}, and its slightly variation known as \textit{Shorted Path Faster Algorithm} (SPFA) which seems to be more efficient with sparse graphs \citep{fanding1994-spfa}.
+These software were primarily used to solve RRMP problems, but they can also be applied in the pricing step. Despite that, the structure of the MDVSP has some important property that allows us to apply specific network flow algorithms when solving these subproblems. Recall the set $T$ of tasks to be scheduled, and the compatibility between tasks we discussed in Section \ref{section:problem-definition}. The elements of set $T$ represent timetable tasks, with a determined starting and ending time. Roughly speaking, two tasks $i$ and $j$ are compatible if $j$ starts after the ending of $i$. As a matter of effect, this property is enough to guarantee that there is no cycles within the graphs $G^K=(V^k, A^k), k \in K$. Formally speaking, we can model tasks as vertices of a directed graph, where the arcs represent a pair of compatible tasks. In such formalism, this is a directed acyclic graph, and we can apply any shortest path algorithm to solve the pricing subproblems for the MDVSP, as long as such an algorithm can deal with negative arc cost. We experimented with the well-known \textit{Bellman-Ford-Moore} (BF) algorithm \citep{bang2008-bellman-ford-moore}, and its variation known as \textit{Shorted Path Faster Algorithm} (SPFA) which seems to be slightly more efficient with sparse graphs \citep{fanding1994-spfa}. The pseudo-code for both of these algorithms are available in Appendix \ref{appendix:bf-algo} and \ref{appendix:spfa-algo}.
 
-Considering the software and algorithms we had available, we can devise in total 15 distinct CG implementations for the MDVSP using any of \{GLPK, CLP, CPLEX\} for solving the RRMP, and any of \{GLPK, CLP, CBC, CPLEX, BF, SPFA\} for the pricing subproblems. For writing purpose, we represent each of the 15 combinations in the format ``\textit{x.y}'' where \textit{x} represents the algorithm we applied to solve the relaxed RMP, and \textit{y} represents the algorithm applied to solve the subproblems. E.g., ``GLPK.SPFA'' indicates that we used GNU GLPK for solving the RRMP, and the SPFA for solving the pricing.
 
-\begin{landscape}
+Considering the software and algorithms we had available, we can devise in total 15 distinct CG implementations for the MDVSP using any of \{GLPK, CLP, CPLEX\} for solving the RRMP, and any of \{GLPK, CLP, CBC, CPLEX, BF, SPFA\} for the pricing subproblems. For writing purpose, we represent each of the 15 combinations in the format ``\textit{x.y}'' where \textit{x} represents the algorithm we applied to solve the relaxed RMP, and \textit{y} represents the algorithm applied to solve the subproblems. E.g., ``GLPK.SPFA'' indicates that we used GNU GLPK for solving the RRMP, and the SPFA for solving the pricing. We tested the proposed algorithms against the benchmark dataset of \citet{pepin2009}, containing in total 30 instances and using six different configurations ($X \in \{2,4\}$ depots, $Y \in \{500,1000,1500\}$ trips.) For each configuration, the authors provided five instances ($Z \in \{0, 1, 2, 3, 4\}$). That said, the instances follow a naming convention of ``mXnYsZ''.
+
+Table~\ref{table:sp-algos} indicates the running times for some combination of the proposed algorithms. The first column indicates the name of instance being solved. \textit{Compact mod.} indicates the running time of CPLEX while solving the linear relaxation of model (\ref{model:compact-obj}--\ref{model:compact:domain}), followed by column \textit{Obj} with the optimal value for the relaxed problem. Specifically to the MDVSP, the solution value for which the RRMP converges is the same of the compact model. According to \citet{desaulniers2006}, this is expected to the cases which the pricing subproblems are easy to solve, i.e., they usually belong to \textsf P complexity class.
+
+CPLEX is the fastest method when solving instances of four depots. For test cases with eight depots, the CG algorithms finishes something in between 1.65 up to 4.04 times faster than the MIP solver. For instances with eight depots and 500 tasks, the best of the tested algorithms apply CPLEX for solving RRMP, and SPFA for solving the shortest path pricing subproblems. For most of the other tests, the fastest combination uses the Coin-OR CLP solver for the RRMP, and SPFA for the subproblems.
 
 \begin{table}[!htb]
-   \footnotesize
+   \scriptsize
+   \tabcolsep=3.5pt
    \caption{Solving time for different strategies for linear relaxation.}
+   \label{table:sp-algos}
    \centering
    \begin{tabular}{rrrrrrrrr}
       \toprule
@@ -309,11 +316,11 @@ Considering the software and algorithms we had available, we can devise in total
 
       &
       Time (sec) & Obj &
-      Coin-OR CLP &
-      GNU GLPK &
+      CLP &
+      GLPK &
       CPLEX &
-      Coin-OR CLP &
-      GNU GLPK &
+      CLP &
+      GLPK &
       CPLEX \\
 
       \midrule
@@ -353,9 +360,112 @@ Considering the software and algorithms we had available, we can devise in total
    \end{tabular}
 \end{table}
 
-\end{landscape}
+When compared to the running times of MIP-based pricing solvers, it becomes clear the advantage of the tailed Bellman-Ford-Moore and SPFA algorithms for the SDVSP. The same applies when comparing the memory consumption of each algorithm: the MIP-based approaches consumes a non-negligible amount of memory as the test cases grow either in number of depots, or in number of tasks.
 
 \bibliographystyle{plainnat}
 \bibliography{bibliography}
+
+\newpage
+\appendix
+
+\section{Bellman-Ford-Moore shortest path algorithm}
+\label{appendix:bf-algo}
+
+\begin{algorithm}
+   \KwIn{Depot $k$, set $T$, and the associated graphs $G^k$}
+   \KwOut{Path and its associated reduced cost.}
+   \tcp{Initialization}
+   \ForEach{$i \in V^k$}{
+      $\mathit{dist}_i \gets \infty$\;
+      $\mathit{pred}_i \gets \mathtt{null}$\;
+   }
+   \BlankLine
+
+   \tcp{Does the relaxation until nothing else changes}
+   \Repeat{$\mathit{changed} = \mathtt{false}$}{
+      $\mathit{changed} \gets \mathtt{false}$\;
+      \ForEach{$(i,j) \in A^k$}{
+         \If{$\mathit{dist}_i + \hat{c}^k_{ij} < \mathit{dist}_j$}{
+            $\mathit{dist}_j \gets \mathit{dist}_i + \hat{c}^k_{ij}$\;
+            $\mathit{pred}_j \gets i$\;
+            $\mathit{changed} \gets \mathtt{true}$\;
+         }
+      }
+   }
+   \BlankLine
+
+   \tcp{Recovers the path}
+   $p \gets \mathtt{EmptyList}()$\;
+   $i \gets \mathit{pred}_{d(k)}$\;
+   \Repeat{$i = o(k)$}{
+      $p \gets \mathtt{Append}(p, i)$\;
+      $i \gets \mathit{pred}_i$\;
+   }
+   $p \gets \mathtt{ReverseList}(p)$\;
+   \BlankLine
+
+   \Return{$p, \mathit{dist}_{d(k)}$}
+   \caption{Bellman-Ford-Moore algorithm adapted to SDVSP.}
+\end{algorithm}
+
+\newpage
+
+\section{Shortest path faster algorithm}
+\label{appendix:spfa-algo}
+
+\begin{algorithm}
+   \scriptsize
+   \KwIn{Depot $k$, set $T$, and the associated graphs $G^k$}
+   \KwOut{Path and its associated reduced cost.}
+   \tcp{Initialization}
+   \ForEach{$i \in V^k$}{
+      $\mathit{dist}_i \gets \infty$\;
+      $\mathit{pred}_i \gets \mathtt{null}$\;
+      $\mathit{inQueue}_i \gets \mathtt{false}$\;
+   }
+   \BlankLine
+
+   \tcp{Initial relaxation}
+   $q \gets \mathtt{EmptyQueue}()$\;
+   \ForEach{$i \in T$}{
+      $\mathit{dist}_i \gets \hat{c}^k_{o(k), i}$\;
+      $\mathit{pred}_i \gets o(k)$\;
+      $\mathit{inQueue}_i \gets \mathtt{true}$\;
+      $q \gets \mathtt{PushQueue}(q, i)$\;
+   }
+   \BlankLine
+
+   \tcp{Does the relaxation until emptying the queue}
+   \While{$\mathtt{NotEmpty}(q)$}{
+      $v \gets \mathtt{PopQueue}(q)$\;
+      $\mathit{inQueue}_v \gets \mathtt{false}$\;
+
+      \ForEach{$j:(v,j) \in A^k$}{
+         \If{$\mathit{dist}_v + \hat{c}^k_{vj} < \mathit{dist}_j$}{
+            $\mathit{dist}_j \gets \mathit{dist}_v + \hat{c}^k_{vj}$\;
+            $\mathit{pred}_j \gets v$\;
+
+            \If{$\mathit{inQueue}_j = \mathtt{false}$}{
+               $q \gets \mathtt{PushQueue}(q, j)$\;
+               $\mathit{inQueue}_j \gets \mathtt{true}$\;
+            }
+         }
+      }
+   }
+   \BlankLine
+
+   \tcp{Recovers the path}
+   $p \gets \mathtt{EmptyList}()$\;
+   $i \gets \mathit{pred}_{d(k)}$\;
+   \Repeat{$i = o(k)$}{
+      $p \gets \mathtt{Append}(p, i)$\;
+      $i \gets \mathit{pred}_i$\;
+   }
+   $p \gets \mathtt{ReverseList}(p)$\;
+   \BlankLine
+
+   \Return{$p, \mathit{dist}_{d(k)}$}
+   \caption{Shortest path faster algorithm adapted to SDVSP.}
+\end{algorithm}
 
 \end{document}
