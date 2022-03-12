@@ -50,7 +50,7 @@ include_directories(src)
 
 # Uncomment the line below to solve MIP-based pricing 
 # problems as a linear program.
-add_definitions(-DMIP_PRICING_LP)
+# add_definitions(-DMIP_PRICING_LP)
 
 add_executable(main
    # Common implementation

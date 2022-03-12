@@ -39,6 +39,10 @@ public:
    auto exportColumns(const char *fname) const noexcept -> void;
    auto importColumns(const char *fname) noexcept -> int;
 
+   // Query column data from the master problem.
+   auto columnDepot(int col) const noexcept -> int;
+   auto columnPath(int col) const noexcept -> const std::vector<int>&;
+
 protected:
    const Instance *m_inst;
    int m_numCols{0};

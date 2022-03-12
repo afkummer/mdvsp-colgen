@@ -84,3 +84,11 @@ auto CgMasterBase::importColumns(const char *fname) noexcept -> int {
    
    return nc;
 }
+
+auto CgMasterBase::columnDepot(int col) const noexcept -> int {
+   return m_colDepot[col];
+}
+
+auto CgMasterBase::columnPath(int col) const noexcept -> const std::vector<int> & {
+   return m_colTrips[col];
+}

@@ -12,6 +12,8 @@
 #include "colgen/PricingCbc.h"
 #include "colgen/PricingGlpk.h"
 
+#include "glpk.h"
+
 #include <iostream>
 #include <string>
 #include <iomanip>
@@ -45,6 +47,9 @@ auto solveCompactModel(const CmdParm &parm, const Instance &inst) noexcept -> in
 
 // Solves a problem using column generation.
 auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -> int;
+
+// Create a compact reduced model using GLPK API.
+auto exportReducedModel(const Instance &inst, const CgMasterBase &rmp, const char outName[]) noexcept -> void;
 
 auto main(int argc, char *argv[]) noexcept -> int {
    // Basic app initialization.
@@ -356,5 +361,178 @@ auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -
    master->exportColumns("cols.txt");
    cout << "RMP columns exported to 'cols.txt'.\n";  
 
+   exportReducedModel(inst, *master, "comp.lp");
+   cout << "Reduced compact model exported to 'comp.lp'.\n";
+
    return EXIT_SUCCESS;
+}
+
+auto exportReducedModel(const Instance &inst, const CgMasterBase &rmp, const char outName[]) noexcept -> void {
+   // This is mostly the same as the instance matrix, and we use it as a cache of
+   // arcs present in the RMP solution.
+   const auto L = inst.numDepots() + inst.numTrips();
+   const auto K = inst.numDepots();
+   const auto O = inst.numTrips();
+   const auto D = inst.numTrips() + 1;
+
+   boost::multi_array<char, 3> present(boost::extents[K][L][L]);
+   fill_n(present.data(), present.num_elements(), 0);
+
+   // Walks through the paths and set the arcs as "present".
+   for (int j = 0; j < rmp.numColumns(); ++j) {
+      const auto &path{rmp.columnPath(j)};
+      // This part of the code only sets the deadheading arcs.
+      for (size_t i = 1; i < path.size(); ++i) {
+         present[rmp.columnDepot(j)][path[i - 1]][path[i]] = 1;
+      }
+
+      // Now set the souce and sink arcs.
+      present[rmp.columnDepot(j)][O][path.front()] = 1;
+      present[rmp.columnDepot(j)][path.back()][D] = 1;
+   }
+
+   char buf[128];
+   glp_prob *model = glp_create_prob();
+
+   glp_set_prob_name(model, "reduced_compact_mdvsp_glpk");
+   glp_set_obj_dir(model, GLP_MIN);
+
+   // Create the variables.
+   const auto N = inst.numTrips() + 2;
+
+   boost::multi_array<int, 3> x(boost::extents[inst.numDepots()][N][N]);
+   fill_n(x.data(), x.num_elements(), -1);
+
+   for (int i = 0; i < inst.numTrips(); ++i) {
+      // Creates source arcs.
+      for (int k = 0; k < inst.numDepots(); ++k) {
+         if (auto cost = inst.sourceCost(k, i); present[k][O][i]) {
+            snprintf(buf, sizeof buf, "source#%d#%d#%d", k, O, i);
+            int col = x[k][O][i] = glp_add_cols(model, 1);
+            glp_set_col_name(model, col, buf);
+            glp_set_obj_coef(model, col, cost);
+            glp_set_col_bnds(model, col, GLP_DB, 0.0, 1.0);
+            glp_set_col_kind(model, col, GLP_BV);
+         }
+      }
+
+      // Creates sink arcs.
+      for (int k = 0; k < inst.numDepots(); ++k) {
+         if (auto cost = inst.sinkCost(k, i); present[k][i][D]) {
+            snprintf(buf, sizeof buf, "sink#%d#%d#%d", k, i, D);
+            int col = x[k][i][D] = glp_add_cols(model, 1);
+            glp_set_col_name(model, col, buf);
+            glp_set_obj_coef(model, col, cost);
+            glp_set_col_bnds(model, col, GLP_DB, 0.0, 1.0);
+            glp_set_col_kind(model, col, GLP_BV);
+         }
+      }
+
+      // Adds all deadheading arcs.
+      for (auto &p : inst.deadheadSuccAdj(i)) {
+         for (int k = 0; k < inst.numDepots(); ++k) {
+            if (present[k][i][p.first]) {
+               snprintf(buf, sizeof buf, "deadhead#%d#%d#%d", k, i, p.first);
+               int col = x[k][i][p.first] = glp_add_cols(model, 1);
+               glp_set_col_name(model, col, buf);
+               glp_set_obj_coef(model, col, p.second);
+               glp_set_col_bnds(model, col, GLP_DB, 0.0, 1.0);
+               glp_set_col_kind(model, col, GLP_BV);
+            }
+         }
+      }
+   }
+
+   // Adds the assignment constraints.
+   for (int i = 0; i < inst.numTrips(); ++i) {
+      vector<int> cols = {0};
+      vector<double> coefs = {0.0};
+
+      for (int k = 0; k < inst.numDepots(); ++k) {
+         for (auto &p : inst.deadheadSuccAdj(i)) {
+            if (present[k][i][p.first]) {
+               auto colId = x[k][i][p.first];
+               assert(colId != -1);
+               cols.push_back(colId);
+               coefs.push_back(1.0);
+            }
+         }
+         if (auto colId = x[k][i][D]; present[k][i][D] && colId != -1) {
+            cols.push_back(colId);
+            coefs.push_back(1.0);
+         }
+      }
+
+      int row = glp_add_rows(model, 1);
+      snprintf(buf, sizeof buf, "assignment#%d", i);
+      glp_set_row_name(model, row, buf);
+      glp_set_row_bnds(model, row, GLP_FX, 1.0, 1.0);
+      glp_set_mat_row(model, row, cols.size()-1, cols.data(), coefs.data());
+   }
+
+   // Adds the flow conservation constraints.
+   for (int i = 0; i < inst.numTrips(); ++i) {
+      for (int k = 0; k < inst.numDepots(); ++k) {
+         vector<int> cols = {0};
+         vector<double> coefs = {0.0};
+
+         if (auto colId = x[k][O][i]; colId != -1) {
+            cols.push_back(colId);
+            coefs.push_back(1.0);
+         }
+
+         if (auto colId = x[k][i][D]; colId != -1) {
+            cols.push_back(colId);
+            coefs.push_back(-1.0);
+         }
+
+         for (auto &p : inst.deadheadPredAdj(i)) {
+            if (present[k][p.first][i]) {
+               auto colId = x[k][p.first][i];
+               assert(colId != -1);
+               cols.push_back(colId);
+               coefs.push_back(1.0);
+            }
+         }
+
+         for (auto &p : inst.deadheadSuccAdj(i)) {
+            if (present[k][i][p.first]) {
+               auto colId = x[k][i][p.first];
+               assert(colId != -1);
+               cols.push_back(colId);
+               coefs.push_back(-1.0);
+            }
+         }
+
+         if (cols.size() > 1) {
+            int row = glp_add_rows(model, 1);
+            snprintf(buf, sizeof buf, "flow_consevation#%d#%d", k, i);
+            glp_set_row_name(model, row, buf);
+            glp_set_row_bnds(model, row, GLP_FX, 0.0, 0.0);
+            glp_set_mat_row(model, row, cols.size() - 1, cols.data(), coefs.data());
+         }
+      }
+   }
+
+   // Adds the depot capacity constraints.
+   for (int k = 0; k < inst.numDepots(); ++k) {
+      vector<int> cols = {0};
+      vector<double> coefs = {0.0};
+
+      for (int i = 0; i < inst.numTrips(); ++i) {
+         if (auto colId = x[k][O][i]; colId != -1) {
+            cols.push_back(colId);
+            coefs.push_back(1.0);
+         }
+      }
+
+      int row = glp_add_rows(model, 1);
+      snprintf(buf, sizeof buf, "depot_cap#%d", k);
+      glp_set_row_name(model, row, buf);
+      glp_set_row_bnds(model, row, GLP_UP, 0.0, inst.depotCapacity(k));
+      glp_set_mat_row(model, row, cols.size() - 1, cols.data(), coefs.data());
+   }
+
+   glp_write_lp(model, nullptr, outName);
+   glp_delete_prob(model);
 }
