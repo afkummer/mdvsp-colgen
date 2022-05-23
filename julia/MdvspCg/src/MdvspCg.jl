@@ -28,42 +28,61 @@ function gencol()
         Subproblem(inst, k)
     end
 
-    # write_to_file(main, "main.lp")
+    timings = open("timings.csv", "w")
+    write(timings, "event,iter,time,bytes,gctime\n")
+    function tm_append(msg, iter, tm)
+        write(timings, "$(msg),$(iter),$(tm.time),$(tm.bytes),$(tm.gctime)\n")
+    end
 
     # Configures the optimizer
     set_optimizer(main, GLPK.Optimizer)
 
-    for iter in 1:5000
-        optimize!(main)
-        #println("Iter: $iter  Main obj: $(objective_value(main))")
+    for iter in 1:10000
+        tm = @timed optimize!(main)
+        tm_append("solve_main", iter, tm)
+    
+        println("Iter: $iter  Main obj: $(objective_value(main))")
 
         depot_duals = dual.(main[:depot_cap])
         task_duals = dual.(main[:task_asg])
         newcols = Vector{Any}(undef, inst.num_depots)
 
-        Threads.@threads for k in 1:inst.num_depots
-            newcols[k] = optimize!(sp[k], depot_duals[k], task_duals)
-        end
-
-        converged = true
-        for k in 1:inst.num_depots
-            if !isempty(newcols[k].path)
-                converged = false
-                add_column!(main, k, newcols[k].cost, newcols[k].path)
+        tm = @timed begin
+            Threads.@threads for k in 1:inst.num_depots
+                newcols[k] = optimize!(sp[k], depot_duals[k], task_duals)
             end
         end
+        tm_append("solve_pricing", iter, tm)
+
+        converged = true
+        tm = @timed begin
+            for k in 1:inst.num_depots
+                if !isempty(newcols[k].path)
+                    converged = false
+                    add_column!(main, k, newcols[k].cost, newcols[k].path)
+                end
+            end
+        end
+        tm_append("add_columns", iter, tm)
 
         if converged
-            println("** COLGEN CONVERGED! **")
-            break
+            if !main[:asg_relax]
+                println("** COLGEN CONVERGED! **")
+                break
+            else
+                println("*** CHANGING RELAXATION STATUS ***")
+                tm = @timed set_main_asg_equals!(main)
+                tm_append("set_equals", iter, tm)
+            end
         end
 
         # write_to_file(main, "main.$iter.lp")
     end
-
+    
     write_to_file(main, "main.final.lp")
+    close(timings)
 
-    return
+    return main
 end
 
 end # module
