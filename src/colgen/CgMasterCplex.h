@@ -20,6 +20,10 @@ public:
 
    virtual auto setAssignmentType(char sense = 'G') noexcept -> void override;   
 
+   virtual auto getValue(int col) const noexcept -> double override;
+   virtual auto getLb(int col) const noexcept -> double override;
+   virtual auto setLb(int col, double bound) noexcept -> void override;
+
 private:
    IloEnv m_env;
    IloModel m_model;

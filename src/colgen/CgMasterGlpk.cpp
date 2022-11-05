@@ -95,6 +95,19 @@ auto CgMasterGlpk::setAssignmentType(char sense) noexcept -> void {
    }
 }
 
+auto CgMasterGlpk::getValue(int col) const noexcept -> double {
+   return glp_get_col_prim(m_model, col+1);
+}
+
+auto CgMasterGlpk::getLb(int col) const noexcept -> double {
+   return glp_get_col_lb(m_model, col+1);
+}
+
+auto CgMasterGlpk::setLb(int col, double bound) noexcept -> void {
+   double ub = glp_get_col_ub(m_model, col+1);
+   glp_set_col_bnds(m_model, col+1, GLP_DB, bound, ub);
+}
+
 auto CgMasterGlpk::addColumn() noexcept -> void {
    assert(m_newcolDepot != -1);
    assert(!m_newcolPath.empty());

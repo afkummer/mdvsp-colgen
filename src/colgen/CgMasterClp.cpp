@@ -86,6 +86,18 @@ auto CgMasterClp::setAssignmentType(char sense) noexcept -> void {
    }
 }
 
+auto CgMasterClp::getValue(int col) const noexcept -> double {
+   return m_lpSolver->getColSolution()[col];
+}
+
+auto CgMasterClp::getLb(int col) const noexcept -> double {
+   return m_lpSolver->getColLower()[col];
+}
+
+auto CgMasterClp::setLb(int col, double bound) noexcept -> void {
+   m_lpSolver->setColLower(col, bound);
+}
+
 auto CgMasterClp::addColumn() noexcept -> void {
    assert(m_newcolDepot != -1);
    assert(!m_newcolPath.empty());

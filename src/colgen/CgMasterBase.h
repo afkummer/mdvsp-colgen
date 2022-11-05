@@ -43,6 +43,12 @@ public:
    auto columnDepot(int col) const noexcept -> int;
    auto columnPath(int col) const noexcept -> const std::vector<int>&;
 
+   // Methods used to access the column bounds
+   virtual auto getValue(int col) const noexcept -> double = 0;
+   virtual auto getLb(int col) const noexcept -> double = 0;
+   virtual auto setLb(int col, double bound) noexcept -> void = 0;
+
+
 protected:
    const Instance *m_inst;
    int m_numCols{0};

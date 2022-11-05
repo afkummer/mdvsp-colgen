@@ -100,6 +100,18 @@ auto CgMasterCplex::setAssignmentType(char sense) noexcept -> void {
    }
 }
 
+auto CgMasterCplex::getValue(int col) const noexcept -> double {
+   return m_cplex.getValue(m_paths[col]);
+}
+
+auto CgMasterCplex::getLb(int col) const noexcept -> double {
+   return m_paths[col].getLB();
+}
+
+auto CgMasterCplex::setLb(int col, double bound) noexcept -> void {
+   m_paths[col].setLb(bound);
+}
+
 auto CgMasterCplex::addColumn() noexcept -> void {
    assert(m_newcolDepot != -1);
    assert(!m_newcolPath.empty());
