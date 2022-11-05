@@ -51,6 +51,9 @@ auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -
 // Create a compact reduced model using GLPK API.
 auto exportReducedModel(const Instance &inst, const CgMasterBase &rmp, const char outName[]) noexcept -> void;
 
+// Given a root node of CG, solves the truncated CG.
+auto solveTruncatedColumnGeneration(const Instance &inst, CgMasterBase &rmp, vector<unique_ptr<CgPricingBase>> &pricing) noexcept -> void ;
+
 auto main(int argc, char *argv[]) noexcept -> int {
    // Basic app initialization.
    const auto parm = parseCommandline(argc, argv);
@@ -364,6 +367,8 @@ auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -
    exportReducedModel(inst, *master, "comp.lp");
    cout << "Reduced compact model exported to 'comp.lp'.\n";
 
+   solveTruncatedColumnGeneration(inst, *master, pricing);
+
    return EXIT_SUCCESS;
 }
 
@@ -535,4 +540,119 @@ auto exportReducedModel(const Instance &inst, const CgMasterBase &rmp, const cha
 
    glp_write_lp(model, nullptr, outName);
    glp_delete_prob(model);
+}
+
+auto solveTruncatedColumnGeneration(const Instance &inst, CgMasterBase &rmp, vector<unique_ptr<CgPricingBase>> &pricing) noexcept -> void {
+   cout << "\n\nStarting truncated column generation!" << endl;
+   int maxThreads = inst.numDepots();
+   int iter = 0;
+   Timer timer;
+   timer.start();
+
+   vector<char> tripCovers(inst.numTrips(), 0);
+   int coverCount = 0;
+
+   auto isFixFeasible = [&](int col) -> bool {
+      for (int trip: rmp.getTripsCovered(col)) {
+         if (tripCovers[trip] != 0)
+            return false; 
+      }
+      return true;
+   };
+
+   auto updateCoverCount = [&](int col) -> void {
+      for (int trip: rmp.getTripsCovered(col)) {
+         assert(tripCovers[trip] == 0);
+         tripCovers[trip] = 1;
+         ++coverCount;
+      }
+   };
+
+   for (;!MdvspSigInt;++iter) {
+
+      // Runs the CG algorithm.
+      double rmpObj;
+
+      for (int cgIter = 0; (cgIter < 20 || rmpObj >= 1e7) && !MdvspSigInt; ++cgIter) {
+         bool continueCg = false;
+         int newCols = 0;
+         rmpObj = rmp.solve();
+         
+         #pragma omp parallel for default(shared) schedule(static, 1) num_threads(maxThreads)
+         for (size_t i = 0; i < pricing.size(); ++i) {
+            auto &sp = pricing[i];
+            // This method already takes the dual multipliers from the master.
+            // All the work of updating subproblem obj is managed internally.
+            sp->solve();
+         }
+         for (size_t i = 0; i < pricing.size(); ++i) {
+            auto &sp = pricing[i];
+            const auto pobj = sp->getObjValue();
+            if (pobj <= -0.0001) {
+               newCols += sp->generateColumns();
+               continueCg = true;
+            }
+         }
+         cout << "\tIter: " << iter << "\tcgIter: " << cgIter << "\tRMP: " << rmpObj << "\tcols: " << rmp.numColumns() << "+" << newCols << "\tseconds: " << timer.elapsed() << endl;
+         if (!newCols) break;
+      }
+
+      int bestCol = -1;
+      double bestBnd = -0.0001;
+      double minBnd = 10.0;
+      const double autofixBnd = 0.8;
+      vector<int> autofixVars;
+      for (int col = 0; col < rmp.numColumns(); ++col) {
+         if (rmp.getLb(col) < 0.5 && rmp.getValue(col) >= autofixBnd) {
+            autofixVars.push_back(col);
+         } else {
+            if (rmp.getLb(col) < 0.5 && rmp.getValue(col) > bestBnd) {
+               if (isFixFeasible(col)) {
+                  bestCol = col;
+                  bestBnd = rmp.getValue(col);
+                  minBnd = min(minBnd, rmp.getValue(col));
+               }
+            }
+         }
+      }
+
+      // bool success=false;
+      // if (!autofixVars.empty()) {
+      //    for (int col: autofixVars) {
+      //       if (isFixFeasible(col)) {
+      //          cout << "Auto-Fixing col#" << col << " >= " << autofixBnd << endl;
+      //          rmp.setLb(col, 1.0); 
+      //          updateCoverCount(col);
+      //          cout << "Trips covered so far: " << coverCount << " out of " << inst.numTrips() << endl;
+      //          success=true;
+      //          break;
+      //       }
+      //       // break;
+      //    }
+      // }
+
+      // if (success)
+      //    continue;
+      
+
+      if (bestCol == -1 || minBnd >= 0.9999999 || bestBnd <= 0.0000001) {
+         break;
+      }
+
+      cout << "Fixing col#" << bestCol << " with bound=" << bestBnd << endl;
+      rmp.setLb(bestCol, 1.0);
+      updateCoverCount(bestCol);
+      cout << "Trips covered so far: " << coverCount << " out of " << inst.numTrips() << endl;
+   }   
+
+   cout << "Truncated column generation finished after " << timer.elapsed() << " seconds" << endl;
+
+   rmp.writeLp("masterTcgFix.lp");
+   rmp.convertToBinary();
+   rmp.writeLp("masterTcgFixInt.lp");
+   for (int col = 0; col < rmp.numColumns(); ++col)
+      rmp.setLb(col, 0.0);
+   rmp.writeLp("masterTcgInt.lp");
+   rmp.convertToRelaxed();
+   rmp.writeLp("masterTcg.lp");
 }

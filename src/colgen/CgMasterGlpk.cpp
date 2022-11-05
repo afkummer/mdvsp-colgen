@@ -108,6 +108,18 @@ auto CgMasterGlpk::setLb(int col, double bound) noexcept -> void {
    glp_set_col_bnds(m_model, col+1, GLP_DB, bound, ub);
 }
 
+auto CgMasterGlpk::convertToBinary() noexcept -> void {
+   for (int col = 1; col <= numColumns(); ++col) {
+      glp_set_col_kind(m_model, col, GLP_BV);
+   }
+}
+
+auto CgMasterGlpk::convertToRelaxed() noexcept -> void {
+   for (int col = 1; col <= numColumns(); ++col) {
+      glp_set_col_kind(m_model, col, GLP_CV);
+   }
+}
+
 auto CgMasterGlpk::addColumn() noexcept -> void {
    assert(m_newcolDepot != -1);
    assert(!m_newcolPath.empty());

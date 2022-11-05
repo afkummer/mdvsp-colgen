@@ -24,6 +24,9 @@ public:
    virtual auto getLb(int col) const noexcept -> double override;
    virtual auto setLb(int col, double bound) noexcept -> void override;
 
+   virtual auto convertToBinary() noexcept -> void override;
+   virtual auto convertToRelaxed() noexcept -> void override;
+
 private:
    IloEnv m_env;
    IloModel m_model;
@@ -35,6 +38,8 @@ private:
 
    IloRangeArray m_range;
    IloNumArray m_duals;
+
+   IloConversion m_binaryConversion;
 
    virtual auto addColumn() noexcept -> void override;
 };

@@ -25,6 +25,9 @@ public:
    virtual auto getLb(int col) const noexcept -> double override;
    virtual auto setLb(int col, double bound) noexcept -> void override;
 
+   virtual auto convertToBinary() noexcept -> void override;
+   virtual auto convertToRelaxed() noexcept -> void override;
+
 private:
    std::unique_ptr<OsiClpSolverInterface> m_lpSolver;
 

@@ -48,6 +48,13 @@ public:
    virtual auto getLb(int col) const noexcept -> double = 0;
    virtual auto setLb(int col, double bound) noexcept -> void = 0;
 
+   // Utility methods to change the model between relaxation and binary programming
+   virtual auto convertToBinary() noexcept -> void = 0;
+   virtual auto convertToRelaxed() noexcept -> void = 0;
+
+   // Returns the list of trips covered by a single column
+   auto getTripsCovered(int col) const noexcept -> const std::vector<int>&;
+
 
 protected:
    const Instance *m_inst;

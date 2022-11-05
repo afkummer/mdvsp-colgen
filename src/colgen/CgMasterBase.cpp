@@ -92,3 +92,8 @@ auto CgMasterBase::columnDepot(int col) const noexcept -> int {
 auto CgMasterBase::columnPath(int col) const noexcept -> const std::vector<int> & {
    return m_colTrips[col];
 }
+
+auto CgMasterBase::getTripsCovered(int col) const noexcept -> const std::vector<int>& {
+   assert(col >= 0 && col < m_numCols);
+   return m_colTrips[col];
+}

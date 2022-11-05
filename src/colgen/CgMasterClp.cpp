@@ -95,7 +95,20 @@ auto CgMasterClp::getLb(int col) const noexcept -> double {
 }
 
 auto CgMasterClp::setLb(int col, double bound) noexcept -> void {
+   //m_lpSolver->setObjCoeff(col, 0.0);
    m_lpSolver->setColLower(col, bound);
+}
+
+auto CgMasterClp::convertToBinary() noexcept -> void {
+   for (int col = 0; col < numColumns(); ++col) {
+      m_lpSolver->setInteger(col);
+   }
+}
+
+auto CgMasterClp::convertToRelaxed() noexcept -> void {
+   for (int col = 0; col < numColumns(); ++col) {
+      m_lpSolver->setContinuous(col);
+   }
 }
 
 auto CgMasterClp::addColumn() noexcept -> void {

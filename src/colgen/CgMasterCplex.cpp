@@ -112,6 +112,18 @@ auto CgMasterCplex::setLb(int col, double bound) noexcept -> void {
    m_paths[col].setLb(bound);
 }
 
+auto CgMasterCplex::convertToBinary() noexcept -> void {
+   if (m_binaryConversion.getImpl())
+      return;
+   m_binaryConversion = IloConversion(m_env, m_paths, IloNumVar::Bool, "ConverToBinary");
+}
+
+auto CgMasterCplex::convertToRelaxed() noexcept -> void {
+   if (m_binaryConversion.getImpl() == nullptr)
+      return;
+   m_binaryConversion.end();
+}
+
 auto CgMasterCplex::addColumn() noexcept -> void {
    assert(m_newcolDepot != -1);
    assert(!m_newcolPath.empty());
