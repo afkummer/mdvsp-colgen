@@ -16,7 +16,7 @@ public:
    virtual auto getSolverName() const noexcept -> std::string = 0;
    virtual auto writeLp(const char *fname) const noexcept -> void = 0;
 
-   virtual auto solve() noexcept -> double = 0;
+   virtual auto solve(const char algo = 'p') noexcept -> double = 0;
    virtual auto getObjValue() const noexcept -> double = 0;
    virtual auto getTripDual(int i) const noexcept -> double = 0;
    virtual auto getDepotCapDual(int k) const noexcept -> double = 0;

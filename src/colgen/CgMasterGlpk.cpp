@@ -1,5 +1,6 @@
 #include "CgMasterGlpk.h"
 
+#include <iostream>
 #include <vector>
 
 using namespace std;
@@ -58,16 +59,28 @@ auto CgMasterGlpk::writeLp(const char *fname) const noexcept -> void {
    glp_write_lp(m_model, nullptr, fname);
 }
 
-auto CgMasterGlpk::solve() noexcept -> double {
+auto CgMasterGlpk::solve(const char algo) noexcept -> double {
    // In this use case, the best method is the primal simplex,
    // mostly because the RMP is always feasible and only requires
    // re-optimization due to additional columns inserted 
    // on-the-fly.
    glp_smcp parm;
    glp_init_smcp(&parm);
-   parm.meth = GLP_PRIMAL;
-   // parm.presolve = GLP_ON; // TODO CHECK
-   // TODO: Build a basis??
+   switch(algo) {
+      case 'p':
+      case 'P':
+         parm.meth = GLP_PRIMAL;
+         break;
+      case 'd':
+      case 'D':
+         parm.meth = GLP_DUAL;
+         break;
+      default:
+         cout << "Unknown algorithm '" << algo << "'" << endl;
+         abort();
+   }
+
+   parm.presolve = GLP_OFF;
    
    // Function that calls simplex/dual simplex, according the parameters.
    glp_simplex(m_model, &parm);

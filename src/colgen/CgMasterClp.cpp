@@ -62,7 +62,20 @@ auto CgMasterClp::writeLp(const char *fname) const noexcept -> void {
    m_lpSolver->writeLp(fname, "");
 }
 
-auto CgMasterClp::solve() noexcept -> double {
+auto CgMasterClp::solve(const char algo) noexcept -> double {
+   switch(algo) {
+      case 'p':
+      case 'P':
+         m_lpSolver->getModelPtr()->primal(2);
+         break;
+      case 'd':
+      case 'D':
+         m_lpSolver->getModelPtr()->dual(2);
+         break;
+      default:
+         cout << "Unknown algorithm '" << algo << "'" << endl;
+         abort();
+   }
    m_lpSolver->resolve();
    return m_lpSolver->getObjValue();
 }

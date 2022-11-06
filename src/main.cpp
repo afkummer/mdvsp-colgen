@@ -290,7 +290,7 @@ auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -
    for (iter = 0; !MdvspSigInt; ++iter) {
       Timer tmInner;
       tmInner.start();
-      rmpObj = master->solve();
+      rmpObj = master->solve(iter == 0 ? 'd' : 'p');
       timeMaster += tmInner.elapsed();
 
       // Solves the pricing subproblems.
@@ -364,6 +364,7 @@ auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -
    master->exportColumns("cols.txt");
    cout << "RMP columns exported to 'cols.txt'.\n";  
 
+   MdvspSigInt = false;
    exportReducedModel(inst, *master, "comp.lp");
    cout << "Reduced compact model exported to 'comp.lp'.\n";
 
@@ -577,7 +578,7 @@ auto solveTruncatedColumnGeneration(const Instance &inst, CgMasterBase &rmp, vec
       for (int cgIter = 0; (cgIter < 20 || rmpObj >= 1e7) && !MdvspSigInt; ++cgIter) {
          bool continueCg = false;
          int newCols = 0;
-         rmpObj = rmp.solve();
+         rmpObj = rmp.solve(cgIter == 0 ? 'd' : 'p');
          
          #pragma omp parallel for default(shared) schedule(static, 1) num_threads(maxThreads)
          for (size_t i = 0; i < pricing.size(); ++i) {
@@ -642,7 +643,7 @@ auto solveTruncatedColumnGeneration(const Instance &inst, CgMasterBase &rmp, vec
       //    continue;
       
 
-      if (bestCol == -1 || minBnd >= 0.9999999 || bestBnd <= 0.0000001) {
+      if (bestCol == -1 || /*minBnd >= 0.9999999 ||*/ bestBnd <= 0.0000001) {
          break;
       }
 

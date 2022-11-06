@@ -68,7 +68,20 @@ auto CgMasterCplex::writeLp(const char *fname) const noexcept -> void {
    m_cplex.exportModel(fname);
 }
 
-auto CgMasterCplex::solve() noexcept -> double {
+auto CgMasterCplex::solve(const char algo) noexcept -> double {
+   switch(algo) {
+      case 'p':
+      case 'P':
+         m_cplex.setParam(IloCplex::RootAlg, IloCplex::Primal);
+         break;
+      case 'd':
+      case 'D':
+         m_cplex.setParam(IloCplex::RootAlg, IloCplex::Dual);
+         break;
+      default:
+         cout << "Unknown algorithm '" << algo << "'" << endl;
+         abort();
+   }
    if (!m_cplex.solve()) {
       cout << "RMP became infeasible.\n";
       writeLp("rmp_problematic.lp");
