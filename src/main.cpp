@@ -572,6 +572,7 @@ auto solveTruncatedColumnGeneration(const Instance &inst, CgMasterBase &rmp, vec
 
       // Runs the CG algorithm.
       double rmpObj;
+      bool optimizeRmp = true;
 
       for (int cgIter = 0; (cgIter < 20 || rmpObj >= 1e7) && !MdvspSigInt; ++cgIter) {
          bool continueCg = false;
@@ -594,8 +595,14 @@ auto solveTruncatedColumnGeneration(const Instance &inst, CgMasterBase &rmp, vec
             }
          }
          cout << "\tIter: " << iter << "\tcgIter: " << cgIter << "\tRMP: " << rmpObj << "\tcols: " << rmp.numColumns() << "+" << newCols << "\tseconds: " << timer.elapsed() << endl;
-         if (!newCols) break;
+         if (!newCols) {
+            optimizeRmp = true; // CG stopped due to max number of iters
+            break;
+         }
       }
+
+      if (optimizeRmp)
+         rmp.solve();
 
       int bestCol = -1;
       double bestBnd = -0.0001;
