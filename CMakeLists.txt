@@ -34,25 +34,28 @@ else()
 endif()
 
 if(NOT CPLEX_PREFIX)
-   message(FATAL_ERROR "CPLEX installation not specified.")
+   message("-- Warning: CPLEX installation not specified, so disabling dependencies.")
+   add_definitions(-UHAVE_CPLEX)
+else()
+   message("-- Using as CPLEX prefix: ${CPLEX_PREFIX}")
+   include_directories(
+      ${CPLEX_PREFIX}/cplex/include
+      ${CPLEX_PREFIX}/concert/include
+   )
+   link_directories(
+      ${CPLEX_PREFIX}/cplex/lib/x86-64_linux/static_pic
+      ${CPLEX_PREFIX}/concert/lib/x86-64_linux/static_pic
+   )
+   add_definitions(-DHAVE_CPLEX)
 endif()
-message("-- Using as CPLEX prefix: ${CPLEX_PREFIX}")
-include_directories(
-   ${CPLEX_PREFIX}/cplex/include 
-   ${CPLEX_PREFIX}/concert/include
-)
-link_directories(
-   ${CPLEX_PREFIX}/cplex/lib/x86-64_linux/static_pic 
-   ${CPLEX_PREFIX}/concert/lib/x86-64_linux/static_pic
-)
-
-include_directories(src)
 
 # Uncomment the line below to solve MIP-based pricing 
 # problems as a linear program.
 # add_definitions(-DMIP_PRICING_LP)
 
-add_executable(main
+include_directories(src)
+
+set(mdvsp_SOURCES
    # Common implementation
    src/main.cpp
    src/Instance.cpp
@@ -63,7 +66,6 @@ add_executable(main
    # Implementations of the master problem
    src/colgen/CgMasterBase.cpp
    src/colgen/CgMasterGlpk.cpp
-   src/colgen/CgMasterCplex.cpp
    src/colgen/CgMasterClp.cpp
 
    # Implementation of pricing algorithms.
@@ -71,11 +73,10 @@ add_executable(main
    src/colgen/PricingBellman.cpp
    src/colgen/PricingSpfa.cpp
    src/colgen/PricingGlpk.cpp
-   src/colgen/PricingCbc.cpp   
-   src/colgen/PricingCplex.cpp
+   src/colgen/PricingCbc.cpp
 )
 
-target_link_libraries(main
+set(mdvsp_LIBRARIES
    # GLPK dependencies
    -lglpk
 
@@ -99,15 +100,30 @@ target_link_libraries(main
    # OpenMP support library
    -lgomp
 
-   # IBM CPLEX dependencies   
-   -pthread
-   -lilocplex
-   -lconcert
-   -lcplex   
-   -ldl
-
    # Boost program-options
    -lboost_program_options
+)
+
+if(CPLEX_PREFIX)
+   set(mdvsp_SOURCES
+      ${mdvsp_SOURCES}
+      src/colgen/CgMasterCplex.cpp
+      src/colgen/PricingCplex.cpp
+   )
+   set(mdvsp_LIBRARIES
+      ${mdvsp_LIBRARIES}
+      -pthread
+      -lilocplex
+      -lconcert
+      -lcplex
+      -ldl
+   )
+endif()
+
+add_executable(main ${mdvsp_SOURCES})
+
+target_link_libraries(main
+   ${mdvsp_LIBRARIES}
 
    # Enables link-time optimization
    -flto

@@ -3,14 +3,17 @@
 #include "Timer.h"
 #include "MemQuery.h"
 #include "colgen/CgMasterBase.h"
-#include "colgen/CgMasterCplex.h"
 #include "colgen/CgMasterGlpk.h"
 #include "colgen/CgMasterClp.h"
-#include "colgen/PricingCplex.h"
 #include "colgen/PricingBellman.h"
 #include "colgen/PricingSpfa.h"
 #include "colgen/PricingCbc.h"
 #include "colgen/PricingGlpk.h"
+
+#ifdef HAVE_CPLEX
+   #include "colgen/CgMasterCplex.h"
+   #include "colgen/PricingCplex.h"
+#endif
 
 #include "glpk.h"
 
@@ -94,11 +97,19 @@ auto parseCommandline(int argc, char **argv) noexcept -> CmdParm {
 
       ("master,m", po::value<string>()->default_value("glpk"), "defines the implementation "
       "backend to use while solving the restricted relaxed master problem. Only has effect when "
-      "the solution method is cg. Accepted values: glpk, cplex, clp")
+      "the solution method is cg. Accepted values: glpk, "
+      #ifdef HAVE_CPLEX
+         "cplex, "
+      #endif
+      "clp")
 
       ("pricing,p", po::value<string>()->default_value("spfa"), "defines the implementation "
       "backend to use while solving the pricing subproblems. Only has effect when "
-      "the solution method is cg. Accepted values: spfa, bellman, glpk, cbc, cplex")
+      "the solution method is cg. Accepted values: spfa, bellman, glpk, cbc"
+      #ifdef HAVE_CPLEX
+         ", cplex"
+      #endif
+      )
 
       ("max-paths", po::value<int>()->default_value(1), "defines the maximum number of paths, "
        "per iteration, to extract from pricing subproblems. The exact number of paths is only "
@@ -163,9 +174,13 @@ auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -
    cout << "\nBuilding master problem.\n";
    if (masterImpl == "glpk") {
       master.reset(new CgMasterGlpk(inst));
-   } else if (masterImpl == "cplex") {
+   } 
+#ifdef HAVE_CPLEX
+   else if (masterImpl == "cplex") {
       master.reset(new CgMasterCplex(inst));
-   } else if (masterImpl == "clp") {
+   } 
+#endif
+   else if (masterImpl == "clp") {
       master.reset(new CgMasterClp(inst));
    } else {
       cout << "Unknown implementation for RMP solver: " << masterImpl << ".\n";
@@ -212,12 +227,16 @@ auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -
          #ifdef MIP_PRICING_LP
             cout << "Solving pricing subproblems as LP.\n";
          #endif
-      } else if (pricingImpl == "cplex") {
+      } 
+   #ifdef HAVE_CPLEX
+      else if (pricingImpl == "cplex") {
          pricing.emplace_back(make_unique<PricingCplex>(inst, *master, k, maxPaths));
          #ifdef MIP_PRICING_LP
             cout << "Solving pricing subproblems as LP.\n";
          #endif
-      } else {
+      } 
+   #endif
+      else {
          cout << "Unknown implementation for pricing solver: " << pricingImpl << ".\n";
          return EXIT_FAILURE;
       }
