@@ -1,5 +1,6 @@
 #include "Instance.h"
 
+#include <algorithm>
 #include <cassert>
 #include <fstream>
 #include <iostream>
@@ -31,6 +32,13 @@ Instance::Instance(const char *fname): m_fname{fname} {
       }
    }
 
+   bool sortCache = getenv("SFPA_LABEL_EXPANSION_LIMIT") != nullptr ? true : false;
+   if (sortCache)
+      cout << "SFPA_LABEL_EXPANSION_LIMIT is set, sorting deadheading caches" << endl;
+   auto cacheEntryComparator = [](const std::pair<int,int> &a, const std::pair<int,int> &b) {
+      return get<1>(a) < get<1>(b);
+   };
+
    // Prepares the deadheading cache.
    m_dhCacheSucc.resize(numTrips());
    m_dhCachePred.resize(numTrips());
@@ -47,6 +55,11 @@ Instance::Instance(const char *fname): m_fname{fname} {
       }
       vecSucc.shrink_to_fit();
       vecPred.shrink_to_fit();
+
+      if (sortCache) {
+         sort(vecSucc.begin(), vecSucc.end(), cacheEntryComparator);
+         sort(vecPred.begin(), vecPred.end(), cacheEntryComparator);
+      }
    }
 }
 
