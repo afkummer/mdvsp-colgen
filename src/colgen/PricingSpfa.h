@@ -20,7 +20,5 @@ private:
    std::vector<double> m_dist;
    std::vector<int> m_pred;
 
-   int m_labelExpansionLimitPerNode;
-
    auto findPathRecursive(std::vector<int> &path, double pcost, std::vector<std::vector<int>> &allPaths) const noexcept -> void;
 };

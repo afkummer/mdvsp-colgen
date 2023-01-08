@@ -14,16 +14,6 @@ CgPricingBase(inst, master, depotId, singlePath ? 1: 999999) {
    m_dist.resize(numNodes());
    m_pred.resize(numNodes());
 
-   m_labelExpansionLimitPerNode = numeric_limits<int>::max();
-   if (getenv("SFPA_LABEL_EXPANSION_LIMIT")) {
-      m_labelExpansionLimitPerNode = stoi(getenv("SFPA_LABEL_EXPANSION_LIMIT"));
-      if (m_labelExpansionLimitPerNode > 0) {
-         cout << "Setting SPFA to perform up to " << m_labelExpansionLimitPerNode << " label expansions per node." << endl;
-      } else {
-         cout << "Bad value for SFPA_LABEL_EXPANSION_LIMIT: " << getenv("SFPA_LABEL_EXPANSION_LIMIT") << endl;
-         exit(EXIT_FAILURE);
-      }
-   }
 }
 
 PricingSpfa::~PricingSpfa() {
@@ -79,7 +69,7 @@ auto PricingSpfa::solve() noexcept -> double {
       inqueue[v] = false;
       const auto iDual = m_master->getTripDual(v);
 
-      int numExpansions = m_labelExpansionLimitPerNode;
+      int numExpansions = m_maxLabelExpansions;
       for (auto &p : m_inst->deadheadSuccAdj(v)) {
          int to = p.first;
          double len = double(p.second) - iDual;

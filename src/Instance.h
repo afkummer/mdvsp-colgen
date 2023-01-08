@@ -18,7 +18,7 @@ extern volatile bool MdvspSigInt;
 class Instance {
 public:
    /// Reads the instance from file.
-   Instance(const char *fname);
+   Instance(const char *fname, bool sortDeadheadArcs = false);
    virtual ~Instance();
 
    auto fileName() const noexcept -> const std::string &;

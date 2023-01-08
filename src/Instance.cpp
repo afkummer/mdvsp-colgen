@@ -7,7 +7,7 @@
 
 using namespace std;
 
-Instance::Instance(const char *fname): m_fname{fname} {
+Instance::Instance(const char *fname, bool sortDeadheadArcs): m_fname{fname} {
    // RAII style: tries to read the instance data in the constructor.
    ifstream fid(fname);
    if (!fid) {
@@ -32,9 +32,6 @@ Instance::Instance(const char *fname): m_fname{fname} {
       }
    }
 
-   bool sortCache = getenv("SFPA_LABEL_EXPANSION_LIMIT") != nullptr ? true : false;
-   if (sortCache)
-      cout << "SFPA_LABEL_EXPANSION_LIMIT is set, sorting deadheading caches" << endl;
    auto cacheEntryComparator = [](const std::pair<int,int> &a, const std::pair<int,int> &b) {
       return get<1>(a) < get<1>(b);
    };
@@ -56,7 +53,7 @@ Instance::Instance(const char *fname): m_fname{fname} {
       vecSucc.shrink_to_fit();
       vecPred.shrink_to_fit();
 
-      if (sortCache) {
+      if (sortDeadheadArcs) {
          sort(vecSucc.begin(), vecSucc.end(), cacheEntryComparator);
          sort(vecPred.begin(), vecPred.end(), cacheEntryComparator);
       }

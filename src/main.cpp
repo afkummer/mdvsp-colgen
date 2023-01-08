@@ -57,13 +57,62 @@ auto exportReducedModel(const Instance &inst, const CgMasterBase &rmp, const cha
 // Given a root node of CG, solves the truncated CG.
 auto solveTruncatedColumnGeneration(const Instance &inst, CgMasterBase &rmp, vector<unique_ptr<CgPricingBase>> &pricing) noexcept -> void ;
 
+auto getEnvMaxLabelExpansions() noexcept -> int {
+   if (getenv("MAX_LABEL_EXPANSIONS")) {
+      int value = stoi(getenv("MAX_LABEL_EXPANSIONS"));
+      if (value > 0) {
+         cout << "Read MAX_LABEL_EXPANSIONS = " << value << "\n";
+      } else {
+         cout << "Bad value for MAX_LABEL_EXPANSIONS: " << getenv("MAX_LABEL_EXPANSIONS") << endl;
+         exit(EXIT_FAILURE);
+      }
+   }
+   return numeric_limits<int>::max();
+}
+
+auto getEnvMaxLabelExpansionsTcg() noexcept -> int {
+   if (getenv("MAX_LABEL_EXPANSIONS_TCG")) {
+      int value = stoi(getenv("MAX_LABEL_EXPANSIONS_TCG"));
+      if (value > 0) {
+         cout << "Read MAX_LABEL_EXPANSIONS_TCG = " << value << "\n";
+      } else {
+         cout << "Bad value for MAX_LABEL_EXPANSIONS_TCG: " << getenv("MAX_LABEL_EXPANSIONS_TCG") << endl;
+         exit(EXIT_FAILURE);
+      }
+   }
+   return numeric_limits<int>::max();
+}
+
+auto getEnvSortDeadheadArcs() noexcept -> bool {
+   if (getenv("SORT_DEADHEAD_ARCS")) {
+      bool value = stoi(getenv("SORT_DEADHEAD_ARCS")) == 0 ? false : true;
+      cout << "Read SORT_DEADHEAD_ARCS = " << value << "\n";
+      return value;      
+   }
+   return false;
+}
+
+auto getEnvMaxTcgSubIter() noexcept -> int {
+   if (getenv("TCG_MAX_SUB_ITERATIONS")) {
+      int value = std::stoi(getenv("TCG_MAX_SUB_ITERATIONS"));
+      if (value > 0) {
+         cout << "Read TCG_MAX_SUB_ITERATIONS = " << value << "\n";
+      } else {
+         cout << "Bad value for TCG_MAX_SUB_ITERATIONS: " << getenv("TCG_MAX_SUB_ITERATIONS") << endl;
+         exit(EXIT_FAILURE);
+      }
+      return value;
+   }
+   return 20;
+}
+
 auto main(int argc, char *argv[]) noexcept -> int {
    // Basic app initialization.
    const auto parm = parseCommandline(argc, argv);
    signal(SIGINT, sigintHandler);
    
    // Parses the problem data.
-   Instance inst(parm["instance"].as<string>().c_str());
+   Instance inst(parm["instance"].as<string>().c_str(), getEnvSortDeadheadArcs());
 
    cout << "--- MDVSP solver ---\n" <<
       "Instance: " << inst.fileName() << "\n" <<
@@ -253,6 +302,10 @@ auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -
    }
    cout << "Build time: " << tm.elapsed() << " sec\n";
    cout << "Current memory usage: " << fixed << setprecision(2) << getMemoryUsageKb() / 1024.0 << " MB\n"; 
+
+   for (auto &k: pricing) {
+      k->setMaxLabelExpansionsPerNode(getEnvMaxLabelExpansions());
+   }
    
    // Variables that store the progress of the optimization.
    bool masterRelax = true;
@@ -572,6 +625,10 @@ auto solveTruncatedColumnGeneration(const Instance &inst, CgMasterBase &rmp, vec
    vector<char> tripCovers(inst.numTrips(), 0);
    int coverCount = 0;
 
+   for (auto &k: pricing) {
+      k->setMaxLabelExpansionsPerNode(getEnvMaxLabelExpansionsTcg());
+   }
+
    auto isFixFeasible = [&](int col) -> bool {
       for (int trip: rmp.getTripsCovered(col)) {
          if (tripCovers[trip] != 0)
@@ -588,13 +645,15 @@ auto solveTruncatedColumnGeneration(const Instance &inst, CgMasterBase &rmp, vec
       }
    };
 
+   const auto maxTcgSubIterations = getEnvMaxTcgSubIter();
+
    for (;!MdvspSigInt;++iter) {
 
       // Runs the CG algorithm.
       double rmpObj;
       bool optimizeRmp = true;
 
-      for (int cgIter = 0; (cgIter < 20 || rmpObj >= 1e7) && !MdvspSigInt; ++cgIter) {
+      for (int cgIter = 0; (cgIter < maxTcgSubIterations || rmpObj >= 1e7) && !MdvspSigInt; ++cgIter) {
          bool continueCg = false;
          int newCols = 0;
          rmpObj = rmp.solve(cgIter == 0 ? 'd' : 'p');
