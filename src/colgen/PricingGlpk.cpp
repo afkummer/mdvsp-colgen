@@ -12,114 +12,8 @@
 using namespace std;
 
 PricingGlpk::PricingGlpk(const Instance &inst, CgMasterBase &master, const int depotId, int maxPaths): 
-   CgPricingBase(inst, master, depotId, maxPaths) {
-
-   char buf[128];
-   m_model = glp_create_prob();
-   
-   // Basic model data.
-   snprintf(buf, sizeof buf, "mdvsp_pricing_glpk#%d", m_depotId);
-   glp_set_prob_name(m_model, buf);
-   glp_set_obj_dir(m_model, GLP_MIN);
-   glp_set_obj_name(m_model, "shortest_path");
-
-   // In this implementation, we use the original IDs for trips
-   const auto N = numNodes();
-   const auto O = sourceNode();
-   const auto D = sinkNode();
-
-   // Reserve memory for storing the variables.
-   m_x.resize(boost::extents[N][N]);
-   fill_n(m_x.data(), m_x.num_elements(), -1);
-
-   // Creates all variables.
-   auto addVar = [&](int i, int j, double cost) {
-      int colId = glp_add_cols(m_model, 1);
-      glp_set_col_name(m_model, colId, buf);
-      #ifdef MIP_PRICING_LP
-            glp_set_col_kind(m_model, colId, GLP_CV);
-      #else
-            glp_set_col_kind(m_model, colId, GLP_BV);
-      #endif
-      glp_set_col_bnds(m_model, colId, GLP_DB, 0.0, 1.0);
-      glp_set_obj_coef(m_model, colId, cost);
-      m_x[i][j] = colId;
-   };
-   for (int i = 0; i < m_inst->numTrips(); ++i) {
-      if (auto cost = m_inst->sourceCost(m_depotId, i); cost != -1) {
-         snprintf(buf, sizeof buf, "source#%d#%d", m_depotId, i);
-         addVar(O, i, cost);
-      }
-      if (auto cost = m_inst->sinkCost(m_depotId, i); cost != -1) {
-         snprintf(buf, sizeof buf, "sink#%d#%d", m_depotId, i);
-         addVar(i, D, cost);
-      }
-      for (int j = 0; j < m_inst->numTrips(); ++j) {
-         if (auto cost = m_inst->deadheadCost(i, j); cost != -1) {
-            snprintf(buf, sizeof buf, "deadhead#%d#%d", i, j);
-            addVar(i, j, cost);
-         }
-      }
-   }
-
-   // Structures to fill rows of the problem.
-   vector <int> matCols {0};
-   vector <double> matCoefs {0.0};
-
-   // The model consists of a flow conservation solely.
-   int rowId = glp_add_rows(m_model, m_inst->numTrips());
-   for (int i = 0; i < m_inst->numTrips(); ++i, ++rowId) {
-      snprintf(buf, sizeof buf, "flow_conservation#%d", i);
-      glp_set_row_name(m_model, rowId, buf);
-      glp_set_row_bnds(m_model, rowId, GLP_FX, 0.0, 0.0);
-
-      // Checks if there is source arc.
-      if (int colId = m_x[O][i]; colId != -1) {
-         matCols.push_back(colId);
-         matCoefs.push_back(1.0);
-      }
-
-      // Checks if there is sink arc.
-      if (int colId = m_x[i][D]; colId != -1) {
-         matCols.push_back(colId);
-         matCoefs.push_back(-1.0);
-      }
-
-      // Adds the remainder arcs.
-      for (int j = 0; j < m_inst->numTrips(); ++j) {
-         if (int colId = m_x[i][j]; colId != -1) {
-            matCols.push_back(colId);
-            matCoefs.push_back(-1.0);
-         }
-         if (int colId = m_x[j][i]; colId != -1) {
-            matCols.push_back(colId);
-            matCoefs.push_back(1.0);
-         }
-      }
-
-      glp_set_mat_row(m_model, rowId, matCols.size()-1, matCols.data(), matCoefs.data());
-      matCols.resize(1);
-      matCoefs.resize(1);
-   }
-
-   // Single path per solve call.
-   if (maxPaths >= 1) {
-      for (int i = 0; i < m_inst->numTrips(); ++i) {
-         // Checks if there is source arc.
-         if (int colId = m_x[O][i]; colId != -1) {
-            matCols.push_back(colId);
-            matCoefs.push_back(1.0);
-         }
-      }
-      int rowId = glp_add_rows(m_model, maxPaths);
-      snprintf(buf, sizeof buf, "max_paths");
-      glp_set_row_name(m_model, rowId, buf);
-      glp_set_row_bnds(m_model, rowId, GLP_UP, 0.0, maxPaths);
-      
-      glp_set_mat_row(m_model, rowId, matCols.size() - 1, matCols.data(), matCoefs.data());
-      matCols.resize(1);
-      matCoefs.resize(1);
-   }
+   CgPricingBase(inst, master, depotId, maxPaths), m_model(nullptr) {
+   // Empty
 }
 
 PricingGlpk::~PricingGlpk() {
@@ -139,6 +33,9 @@ auto PricingGlpk::isExact() const noexcept -> bool {
 }
 
 auto PricingGlpk::solve() noexcept -> double {
+   if (!m_model)
+      buildModel();
+
    const auto O = sourceNode();
    const auto D = sinkNode();
 
@@ -259,4 +156,117 @@ auto PricingGlpk::colValue(int j) const noexcept -> double {
    #else
       return glp_mip_col_val(m_model, j);
    #endif
+}
+
+auto PricingGlpk::buildModel() noexcept -> void {
+   char buf[128];
+   m_model = glp_create_prob();
+   
+   // Basic model data.
+   snprintf(buf, sizeof buf, "mdvsp_pricing_glpk#%d", m_depotId);
+   glp_set_prob_name(m_model, buf);
+   glp_set_obj_dir(m_model, GLP_MIN);
+   glp_set_obj_name(m_model, "shortest_path");
+
+   // In this implementation, we use the original IDs for trips
+   const auto N = numNodes();
+   const auto O = sourceNode();
+   const auto D = sinkNode();
+
+   // Reserve memory for storing the variables.
+   m_x.resize(boost::extents[N][N]);
+   fill_n(m_x.data(), m_x.num_elements(), -1);
+
+   // Creates all variables.
+   auto addVar = [&](int i, int j, double cost) {
+      int colId = glp_add_cols(m_model, 1);
+      glp_set_col_name(m_model, colId, buf);
+      #ifdef MIP_PRICING_LP
+            glp_set_col_kind(m_model, colId, GLP_CV);
+      #else
+            glp_set_col_kind(m_model, colId, GLP_BV);
+      #endif
+      glp_set_col_bnds(m_model, colId, GLP_DB, 0.0, 1.0);
+      glp_set_obj_coef(m_model, colId, cost);
+      m_x[i][j] = colId;
+   };
+   for (int i = 0; i < m_inst->numTrips(); ++i) {
+      if (auto cost = m_inst->sourceCost(m_depotId, i); cost != -1) {
+         snprintf(buf, sizeof buf, "source#%d#%d", m_depotId, i);
+         addVar(O, i, cost);
+      }
+      if (auto cost = m_inst->sinkCost(m_depotId, i); cost != -1) {
+         snprintf(buf, sizeof buf, "sink#%d#%d", m_depotId, i);
+         addVar(i, D, cost);
+      }
+      int numExpansions = m_maxLabelExpansions;
+      for (int j = 0; j < m_inst->numTrips(); ++j) {
+         if (auto cost = m_inst->deadheadCost(i, j); cost != -1) {
+            snprintf(buf, sizeof buf, "deadhead#%d#%d", i, j);
+            addVar(i, j, cost);
+
+            if (--numExpansions == 0)
+               break;
+         }
+      }
+   }
+
+   // Structures to fill rows of the problem.
+   vector <int> matCols {0};
+   vector <double> matCoefs {0.0};
+
+   // The model consists of a flow conservation solely.
+   int rowId = glp_add_rows(m_model, m_inst->numTrips());
+   for (int i = 0; i < m_inst->numTrips(); ++i, ++rowId) {
+      snprintf(buf, sizeof buf, "flow_conservation#%d", i);
+      glp_set_row_name(m_model, rowId, buf);
+      glp_set_row_bnds(m_model, rowId, GLP_FX, 0.0, 0.0);
+
+      // Checks if there is source arc.
+      if (int colId = m_x[O][i]; colId != -1) {
+         matCols.push_back(colId);
+         matCoefs.push_back(1.0);
+      }
+
+      // Checks if there is sink arc.
+      if (int colId = m_x[i][D]; colId != -1) {
+         matCols.push_back(colId);
+         matCoefs.push_back(-1.0);
+      }
+
+      // Adds the remainder arcs.
+      for (int j = 0; j < m_inst->numTrips(); ++j) {
+         if (int colId = m_x[i][j]; colId != -1) {
+            matCols.push_back(colId);
+            matCoefs.push_back(-1.0);
+         }
+         if (int colId = m_x[j][i]; colId != -1) {
+            matCols.push_back(colId);
+            matCoefs.push_back(1.0);
+         }
+      }
+
+      glp_set_mat_row(m_model, rowId, matCols.size()-1, matCols.data(), matCoefs.data());
+      matCols.resize(1);
+      matCoefs.resize(1);
+   }
+
+   // Single path per solve call.
+   if (m_maxPaths >= 1) {
+      for (int i = 0; i < m_inst->numTrips(); ++i) {
+         // Checks if there is source arc.
+         if (int colId = m_x[O][i]; colId != -1) {
+            matCols.push_back(colId);
+            matCoefs.push_back(1.0);
+         }
+      }
+      int rowId = glp_add_rows(m_model, m_maxPaths);
+      snprintf(buf, sizeof buf, "max_paths");
+      glp_set_row_name(m_model, rowId, buf);
+      glp_set_row_bnds(m_model, rowId, GLP_UP, 0.0, m_maxPaths);
+      
+      glp_set_mat_row(m_model, rowId, matCols.size() - 1, matCols.data(), matCoefs.data());
+      matCols.resize(1);
+      matCoefs.resize(1);
+   }
 }

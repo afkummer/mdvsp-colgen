@@ -26,4 +26,5 @@ private:
    auto findPathRecursive(std::vector<int> &path, double pcost, std::vector<std::vector<int>> &allPaths) const noexcept -> void;
 
    auto colValue(int j) const noexcept -> double;
+   auto buildModel() noexcept -> void;
 };
