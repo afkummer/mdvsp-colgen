@@ -574,7 +574,7 @@ auto exportReducedModel(const Instance &inst, const CgMasterBase &rmp, const cha
 
 auto solveTruncatedColumnGeneration(const Instance &inst, CgMasterBase &rmp, vector<unique_ptr<CgPricingBase>> &pricing) noexcept -> void {
    cout << "\n\nStarting truncated column generation!" << endl;
-   int maxThreads = inst.numDepots();
+   int maxThreads = 1;
    int iter = 0;
    Timer timer;
    timer.start();
@@ -635,6 +635,7 @@ auto solveTruncatedColumnGeneration(const Instance &inst, CgMasterBase &rmp, vec
             optimizeRmp = true; // CG stopped due to max number of iters
             break;
          }
+         maxThreads = inst.numDepots();
       }
 
       if (optimizeRmp)
