@@ -44,6 +44,7 @@ public:
    auto columnPath(int col) const noexcept -> const std::vector<int>&;
 
    // Methods used to access the column bounds
+   auto getCost(int col) const noexcept -> double;
    virtual auto getValue(int col) const noexcept -> double = 0;
    virtual auto getLb(int col) const noexcept -> double = 0;
    virtual auto setLb(int col, double bound) noexcept -> void = 0;
@@ -69,6 +70,7 @@ protected:
    // Cached copy of the columns.
    std::vector<int> m_colDepot;
    std::vector<std::vector<int>> m_colTrips;
+   std::vector<double> m_colCost;
 
    virtual auto addColumn() noexcept -> void = 0;
 };

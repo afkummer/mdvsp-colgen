@@ -21,6 +21,7 @@
 #include <iostream>
 #include <string>
 #include <iomanip>
+#include <random>
 #include <fstream>
 #include <csignal>
 
@@ -311,7 +312,7 @@ auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -
    tm.start();
    tmPrint.start();
    int iter = 0;
-   for (iter = 0; !MdvspSigInt; ++iter) {
+   for (iter = 0; ; ++iter) {
       Timer tmInner;
       tmInner.start();
       rmpObj = master->solve(iter == 0 ? 'd' : 'p');
@@ -359,6 +360,18 @@ auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -
             printLog(iter, true);
 
             cout << "\nNo new columns generated.\nStopping the algorithm.\n";
+            break;
+         }
+      }
+
+      if (MdvspSigInt) {
+         if (masterRelax) {
+            masterRelax = false;
+            cout << "***** EARLY CONVERTING MASTER RELAXATION DUE TO SIGINT *****\n";
+            master->setAssignmentType('E');
+            MdvspSigInt = false;
+         } else {
+            cout << "***** EARLY STOPPING COLUMN GENERATION DUE TO SIGINT *****\n";
             break;
          }
       }
@@ -586,6 +599,29 @@ auto solveTruncatedColumnGeneration(const Instance &inst, CgMasterBase &rmp, vec
       k->setMaxLabelExpansionsPerNode(getEnvMaxLabelExpansionsTcg());
    }
 
+   const auto varSelection = getEnvTcgVarSelection();
+   const auto graspStrategy = getEnvTcgGraspStrategy();
+   const auto graspAlpha = getEnvTcgGraspAlpha();
+
+   struct Candidate {
+      int column;
+      double cost;
+      double value;
+   };
+
+   auto candCostComp = [&] (const Candidate &a, const Candidate &b) {
+      return a.cost < b.cost;
+   };
+
+   auto candValueComp = [&] (const Candidate &a, const Candidate &b) {
+      return a.value < b.value;
+   };
+
+   vector<Candidate> graspCandidates;
+   mt19937 rng{1};
+   uniform_int_distribution<std::size_t> dist(0, 1);
+
+
    auto isFixFeasible = [&](int col) -> bool {
       for (int trip: rmp.getTripsCovered(col)) {
          if (tripCovers[trip] != 0)
@@ -596,7 +632,10 @@ auto solveTruncatedColumnGeneration(const Instance &inst, CgMasterBase &rmp, vec
 
    auto updateCoverCount = [&](int col) -> void {
       for (int trip: rmp.getTripsCovered(col)) {
-         assert(tripCovers[trip] == 0);
+         if (tripCovers[trip] != 0) {
+            cout << "FATAL: Double-covered trip: " << trip << endl;
+            exit(EXIT_FAILURE);
+         }
          tripCovers[trip] = 1;
          ++coverCount;
       }
@@ -641,46 +680,56 @@ auto solveTruncatedColumnGeneration(const Instance &inst, CgMasterBase &rmp, vec
       if (optimizeRmp)
          rmp.solve();
 
-      int bestCol = -1;
-      double bestBnd = -0.0001;
-      double minBnd = 10.0;
-      const double autofixBnd = 0.8;
-      vector<int> autofixVars;
+      graspCandidates.clear();
       for (int col = 0; col < rmp.numColumns(); ++col) {
-         if (rmp.getLb(col) < 0.5 && rmp.getValue(col) >= autofixBnd) {
-            autofixVars.push_back(col);
+         const auto lb = rmp.getLb(col);
+         if (lb >= 0.5) 
+            continue;
+
+         const auto value = rmp.getValue(col);
+         if (value <= 1e-6)
+            continue;
+
+         if (!isFixFeasible(col))
+            continue;
+
+         Candidate candidate;
+         candidate.column = col;
+         candidate.value = value;
+
+         if (varSelection == TCG_VAR_SEL_SIMPLE) {
+            graspCandidates.push_back(candidate);
          } else {
-            if (rmp.getLb(col) < 0.5 && rmp.getValue(col) > bestBnd) {
-               if (isFixFeasible(col)) {
-                  bestCol = col;
-                  bestBnd = rmp.getValue(col);
-                  minBnd = min(minBnd, rmp.getValue(col));
+            if (graspStrategy == TCG_GRASP_STRATEGY_DIRECT) {
+               candidate.cost = rmp.getCost(col);
+               graspCandidates.push_back(candidate);
+            } else {
+               if (graspCandidates.empty() || value > 0.2) {
+                  rmp.setLb(col, 1.0);
+                  candidate.cost = rmp.solve();
+                  graspCandidates.push_back(candidate);
+                  rmp.setLb(col, 0.0);
                }
             }
          }
       }
 
-      // bool success=false;
-      // if (!autofixVars.empty()) {
-      //    for (int col: autofixVars) {
-      //       if (isFixFeasible(col)) {
-      //          cout << "Auto-Fixing col#" << col << " >= " << autofixBnd << endl;
-      //          rmp.setLb(col, 1.0); 
-      //          updateCoverCount(col);
-      //          cout << "Trips covered so far: " << coverCount << " out of " << inst.numTrips() << endl;
-      //          success=true;
-      //          break;
-      //       }
-      //       // break;
-      //    }
-      // }
-
-      // if (success)
-      //    continue;
-      
-
-      if (bestCol == -1 || /*minBnd >= 0.9999999 ||*/ bestBnd <= 0.0000001) {
+      if (graspCandidates.empty()) 
          break;
+
+      int bestCol = -1;
+      double bestBnd = 0.0;
+      if (varSelection == TCG_VAR_SEL_SIMPLE) {
+         sort(graspCandidates.rbegin(), graspCandidates.rend(), candValueComp);
+         bestCol = graspCandidates.front().column;
+         bestBnd = graspCandidates.front().value;
+      } else {
+         sort(graspCandidates.begin(), graspCandidates.end(), candCostComp);
+         auto maxPos = max(1, (int) trunc(graspCandidates.size() * graspAlpha));
+         dist = uniform_int_distribution<size_t>(0, maxPos-1);
+         const auto selection = dist(rng);
+         bestCol = graspCandidates[selection].column;
+         bestBnd = graspCandidates[selection].value;
       }
 
       cout << "Fixing col#" << bestCol << " with bound=" << bestBnd << endl;

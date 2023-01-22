@@ -3,6 +3,7 @@
 #include <iostream>
 #include <string>
 #include <limits>
+#include <cstring>
 
 /**
  * Defines the maximum number of arcs to explore during the pricing solver.
@@ -30,6 +31,28 @@
  * Default value: 20
  */
 #define TCG_MAX_SUB_ITERATIONS "TCG_MAX_SUB_ITERATIONS"
+
+/**
+ * Defines the algorithm used to select the next variable to fix in TCG.
+ * Values: simple (default), grasp
+ */
+#define TCG_VAR_SEL "TCG_VAR_SEL"
+#define TCG_VAR_SEL_SIMPLE 0
+#define TCG_VAR_SEL_GRASP 1
+
+/**
+ * Defines the strategy to compute CL for GRASP
+ * Values: direct (default), eval
+ */
+#define TCG_GRASP_STRATEGY "TCG_GRASP_STRATEGY"
+#define TCG_GRASP_STRATEGY_DIRECT 0
+#define TCG_GRASP_STRATEGY_EVAL 1
+
+/**
+ * Defines the alpha value used to form the RCL.
+ * Values: [0.0, 1.0], default of 0.2
+ */
+#define TCG_GRASP_ALPHA "TCG_GRASP_ALPHA" 
 
 inline auto getEnvMaxLabelExpansions() noexcept -> int {
    if (getenv(MAX_LABEL_EXPANSIONS)) {
@@ -80,4 +103,45 @@ inline auto getEnvMaxTcgSubIter() noexcept -> int {
       return value;
    }
    return 20;
+}
+
+inline auto getEnvTcgVarSelection() noexcept -> int {
+   const auto rawValue = getenv(TCG_VAR_SEL);
+   if (!rawValue)
+      return TCG_VAR_SEL_SIMPLE;
+   std::cout << "Read TCG_VAR_SEL = " << rawValue << "\n";
+   if (strcmp("simple", rawValue) == 0)
+      return TCG_VAR_SEL_SIMPLE;
+   if (strcmp("grasp", rawValue) == 0)
+      return TCG_VAR_SEL_GRASP;
+   
+   std::cout << "Bad value for TCG_VAR_SEL: " << rawValue << std::endl;
+   exit(EXIT_FAILURE);
+
+   return -1;
+}
+
+inline auto getEnvTcgGraspStrategy() noexcept -> int {
+   const auto rawValue = getenv(TCG_GRASP_STRATEGY);
+   if (!rawValue)
+      return TCG_GRASP_STRATEGY_DIRECT;
+   std::cout << "Read TCG_GRASP_STRATEGY = " << rawValue << "\n";
+   if (strcmp("direct", rawValue) == 0)
+      return TCG_GRASP_STRATEGY_DIRECT;
+   if (strcmp("eval", rawValue) == 0)
+      return TCG_GRASP_STRATEGY_EVAL;
+   
+   std::cout << "Bad value for TCG_GRASP_STRATEGY: " << rawValue << std::endl;
+   exit(EXIT_FAILURE);
+
+   return -1;
+}
+
+inline auto getEnvTcgGraspAlpha() noexcept -> double {
+   const auto rawValue = getenv(TCG_GRASP_ALPHA);
+   if (!rawValue)
+      return 0.2;
+   const auto value = std::stod(rawValue);
+   std::cout << "Read TCG_GRASP_ALPHA = " << value << "\n";
+   return value;
 }

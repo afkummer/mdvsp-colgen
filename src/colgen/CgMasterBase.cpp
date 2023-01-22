@@ -46,6 +46,7 @@ auto CgMasterBase::commitColumn() noexcept -> void {
 
    m_colDepot.push_back(m_newcolDepot);
    m_colTrips.push_back(m_newcolPath);
+   m_colCost.push_back(m_newcolCost);
 }
 
 auto CgMasterBase::numColumns() const noexcept -> int {
@@ -91,6 +92,10 @@ auto CgMasterBase::columnDepot(int col) const noexcept -> int {
 
 auto CgMasterBase::columnPath(int col) const noexcept -> const std::vector<int> & {
    return m_colTrips[col];
+}
+
+auto CgMasterBase::getCost(int col) const noexcept -> double {
+   return m_colCost[col];
 }
 
 auto CgMasterBase::getTripsCovered(int col) const noexcept -> const std::vector<int>& {
