@@ -29,4 +29,5 @@ private:
    std::unique_ptr<CbcModel> m_model;   
 
    auto findPathRecursive(std::vector<int> &path, double pcost, std::vector<std::vector<int>> &allPaths) const noexcept -> void;
+   auto buildModel() noexcept -> void;
 };

@@ -11,98 +11,7 @@
 using namespace std;
 
 PricingCbc::PricingCbc(const Instance &inst, CgMasterBase &master, int depotId, int maxPaths): CgPricingBase(inst, master, depotId, maxPaths) {
-   char buf[128];
-   m_lpSolver.reset(new OsiClpSolverInterface());
-
-   // Create the variables.
-   const auto N = numNodes();
-   const auto O = sourceNode();
-   const auto D = sinkNode();
-   m_x.resize(boost::extents[N][N]);
-   fill_n(m_x.data(), m_x.num_elements(), -1);
-
-   // Class used to build models.
-   CoinModel builder;
-
-   for (int i = 0; i < m_inst->numTrips(); ++i) {
-      // Creates source arcs.
-      if (auto cost = m_inst->sourceCost(m_depotId, i); cost != -1) {
-         snprintf(buf, sizeof buf, "source#%d#%d", m_depotId, i);
-         m_x[O][i] = builder.numberColumns();
-         #ifndef MIP_PRICING_LP
-            builder.addColumn(0, nullptr, nullptr, 0.0, 1.0, cost, buf, true);
-         #else
-            builder.addColumn(0, nullptr, nullptr, 0.0, 1.0, cost, buf, false);
-         #endif
-      }
-
-      // Creates sink arcs.
-      if (auto cost = m_inst->sinkCost(m_depotId, i); cost != -1) {
-         snprintf(buf, sizeof buf, "sink#%d#%d", m_depotId, i);
-         m_x[i][D] = builder.numberColumns();
-         #ifndef MIP_PRICING_LP
-            builder.addColumn(0, nullptr, nullptr, 0.0, 1.0, cost, buf, true);
-         #else
-            builder.addColumn(0, nullptr, nullptr, 0.0, 1.0, cost, buf, false);
-         #endif
-      }
-
-      // Adds all deadheading arcs.
-      for (int j = 0; j < m_inst->numTrips(); ++j) {
-         if (auto cost = m_inst->deadheadCost(i, j); cost != -1) {
-            snprintf(buf, sizeof buf, "deadhead#%d#%d", i, j);
-            m_x[i][j] = builder.numberColumns();
-            #ifndef MIP_PRICING_LP
-               builder.addColumn(0, nullptr, nullptr, 0.0, 1.0, cost, buf, true);
-            #else
-               builder.addColumn(0, nullptr, nullptr, 0.0, 1.0, cost, buf, false);
-            #endif
-         }
-      }
-   }
-  
-   // Adds the flow conservation constraints.
-   for (int i = 0; i < m_inst->numTrips(); ++i) {
-      vector<int> cols;
-      vector<double> coefs;
-
-      for (int j = 0; j < N; ++j) {
-         if (auto colId = m_x[i][j]; colId != -1) {
-            cols.push_back(colId);
-            coefs.push_back(-1.0);
-         }
-         if (auto colId = m_x[j][i]; colId != -1) {
-            cols.push_back(colId);
-            coefs.push_back(1.0);
-         }
-      }
-
-      snprintf(buf, sizeof buf, "flow_consevation#%d", i);
-      builder.addRow(cols.size(), cols.data(), coefs.data(), 0.0, 0.0, buf);
-   }
-
-   // Optional constraint to force a single path.
-   if (maxPaths >= 1) {
-      vector<int> cols;
-      vector<double> coefs;
-
-      for (int i = 0; i < m_inst->numTrips(); ++i) {
-         if (auto colId = m_x[O][i]; colId != -1) {
-            cols.push_back(colId);
-            coefs.push_back(1.0);
-         }
-      }
-
-      snprintf(buf, sizeof buf, "max_paths#%d", m_depotId);
-      builder.addRow(cols.size(), cols.data(), coefs.data(), -numeric_limits<double>::infinity(), maxPaths, buf);
-   }
-
-   snprintf(buf, sizeof buf, "mdvsp_pricing_coin#%d", m_depotId);
-   builder.setProblemName(buf);
-   builder.setOptimizationDirection(1.0);
-
-   m_lpSolver->loadFromCoinModel(builder);
-   m_lpSolver->setObjName("shortest_path");
+   // Empty
 }
 
 PricingCbc::~PricingCbc() {
@@ -122,6 +31,8 @@ auto PricingCbc::isExact() const noexcept -> bool {
 }
 
 auto PricingCbc::solve() noexcept -> double {
+   if (!m_lpSolver)
+      buildModel();
    const auto O = sourceNode();
    const auto D = sinkNode();
 
@@ -207,4 +118,103 @@ auto PricingCbc::findPathRecursive(std::vector<int> &path, double pcost, std::ve
          path.pop_back();
       }
    }
+}
+
+auto PricingCbc::buildModel() noexcept -> void {
+   char buf[128];
+   m_lpSolver.reset(new OsiClpSolverInterface());
+
+   // Create the variables.
+   const auto N = numNodes();
+   const auto O = sourceNode();
+   const auto D = sinkNode();
+   m_x.resize(boost::extents[N][N]);
+   fill_n(m_x.data(), m_x.num_elements(), -1);
+
+   // Class used to build models.
+   CoinModel builder;
+
+   for (int i = 0; i < m_inst->numTrips(); ++i) {
+      // Creates source arcs.
+      if (auto cost = m_inst->sourceCost(m_depotId, i); cost != -1) {
+         snprintf(buf, sizeof buf, "source#%d#%d", m_depotId, i);
+         m_x[O][i] = builder.numberColumns();
+         #ifndef MIP_PRICING_LP
+            builder.addColumn(0, nullptr, nullptr, 0.0, 1.0, cost, buf, true);
+         #else
+            builder.addColumn(0, nullptr, nullptr, 0.0, 1.0, cost, buf, false);
+         #endif
+      }
+
+      // Creates sink arcs.
+      if (auto cost = m_inst->sinkCost(m_depotId, i); cost != -1) {
+         snprintf(buf, sizeof buf, "sink#%d#%d", m_depotId, i);
+         m_x[i][D] = builder.numberColumns();
+         #ifndef MIP_PRICING_LP
+            builder.addColumn(0, nullptr, nullptr, 0.0, 1.0, cost, buf, true);
+         #else
+            builder.addColumn(0, nullptr, nullptr, 0.0, 1.0, cost, buf, false);
+         #endif
+      }
+
+      // Adds all deadheading arcs, or up to the maximum number of arcs allowed to expand.
+      int numExpansions = m_maxLabelExpansions;
+      for (int j = 0; j < m_inst->numTrips(); ++j) {
+         if (auto cost = m_inst->deadheadCost(i, j); cost != -1) {
+            snprintf(buf, sizeof buf, "deadhead#%d#%d", i, j);
+            m_x[i][j] = builder.numberColumns();
+            #ifndef MIP_PRICING_LP
+               builder.addColumn(0, nullptr, nullptr, 0.0, 1.0, cost, buf, true);
+            #else
+               builder.addColumn(0, nullptr, nullptr, 0.0, 1.0, cost, buf, false);
+            #endif
+
+            if (--numExpansions == 0)
+               break;
+         }
+      }
+   }
+  
+   // Adds the flow conservation constraints.
+   for (int i = 0; i < m_inst->numTrips(); ++i) {
+      vector<int> cols;
+      vector<double> coefs;
+
+      for (int j = 0; j < N; ++j) {
+         if (auto colId = m_x[i][j]; colId != -1) {
+            cols.push_back(colId);
+            coefs.push_back(-1.0);
+         }
+         if (auto colId = m_x[j][i]; colId != -1) {
+            cols.push_back(colId);
+            coefs.push_back(1.0);
+         }
+      }
+
+      snprintf(buf, sizeof buf, "flow_consevation#%d", i);
+      builder.addRow(cols.size(), cols.data(), coefs.data(), 0.0, 0.0, buf);
+   }
+
+   // Optional constraint to force a single path.
+   if (m_maxPaths >= 1) {
+      vector<int> cols;
+      vector<double> coefs;
+
+      for (int i = 0; i < m_inst->numTrips(); ++i) {
+         if (auto colId = m_x[O][i]; colId != -1) {
+            cols.push_back(colId);
+            coefs.push_back(1.0);
+         }
+      }
+
+      snprintf(buf, sizeof buf, "max_paths#%d", m_depotId);
+      builder.addRow(cols.size(), cols.data(), coefs.data(), -numeric_limits<double>::infinity(), m_maxPaths, buf);
+   }
+
+   snprintf(buf, sizeof buf, "mdvsp_pricing_coin#%d", m_depotId);
+   builder.setProblemName(buf);
+   builder.setOptimizationDirection(1.0);
+
+   m_lpSolver->loadFromCoinModel(builder);
+   m_lpSolver->setObjName("shortest_path");
 }
