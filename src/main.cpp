@@ -1,3 +1,4 @@
+#include "EnvVars.h"
 #include "Instance.h"
 #include "ModelCbc.h"
 #include "Timer.h"
@@ -56,55 +57,6 @@ auto exportReducedModel(const Instance &inst, const CgMasterBase &rmp, const cha
 
 // Given a root node of CG, solves the truncated CG.
 auto solveTruncatedColumnGeneration(const Instance &inst, CgMasterBase &rmp, vector<unique_ptr<CgPricingBase>> &pricing) noexcept -> void ;
-
-auto getEnvMaxLabelExpansions() noexcept -> int {
-   if (getenv("MAX_LABEL_EXPANSIONS")) {
-      int value = stoi(getenv("MAX_LABEL_EXPANSIONS"));
-      if (value > 0) {
-         cout << "Read MAX_LABEL_EXPANSIONS = " << value << "\n";
-      } else {
-         cout << "Bad value for MAX_LABEL_EXPANSIONS: " << getenv("MAX_LABEL_EXPANSIONS") << endl;
-         exit(EXIT_FAILURE);
-      }
-   }
-   return numeric_limits<int>::max();
-}
-
-auto getEnvMaxLabelExpansionsTcg() noexcept -> int {
-   if (getenv("MAX_LABEL_EXPANSIONS_TCG")) {
-      int value = stoi(getenv("MAX_LABEL_EXPANSIONS_TCG"));
-      if (value > 0) {
-         cout << "Read MAX_LABEL_EXPANSIONS_TCG = " << value << "\n";
-      } else {
-         cout << "Bad value for MAX_LABEL_EXPANSIONS_TCG: " << getenv("MAX_LABEL_EXPANSIONS_TCG") << endl;
-         exit(EXIT_FAILURE);
-      }
-   }
-   return numeric_limits<int>::max();
-}
-
-auto getEnvSortDeadheadArcs() noexcept -> bool {
-   if (getenv("SORT_DEADHEAD_ARCS")) {
-      bool value = stoi(getenv("SORT_DEADHEAD_ARCS")) == 0 ? false : true;
-      cout << "Read SORT_DEADHEAD_ARCS = " << value << "\n";
-      return value;      
-   }
-   return false;
-}
-
-auto getEnvMaxTcgSubIter() noexcept -> int {
-   if (getenv("TCG_MAX_SUB_ITERATIONS")) {
-      int value = std::stoi(getenv("TCG_MAX_SUB_ITERATIONS"));
-      if (value > 0) {
-         cout << "Read TCG_MAX_SUB_ITERATIONS = " << value << "\n";
-      } else {
-         cout << "Bad value for TCG_MAX_SUB_ITERATIONS: " << getenv("TCG_MAX_SUB_ITERATIONS") << endl;
-         exit(EXIT_FAILURE);
-      }
-      return value;
-   }
-   return 20;
-}
 
 auto main(int argc, char *argv[]) noexcept -> int {
    // Basic app initialization.
