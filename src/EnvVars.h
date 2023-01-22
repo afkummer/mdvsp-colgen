@@ -36,6 +36,7 @@ inline auto getEnvMaxLabelExpansions() noexcept -> int {
       int value = std::stoi(getenv(MAX_LABEL_EXPANSIONS));
       if (value > 0) {
          std::cout << "Read MAX_LABEL_EXPANSIONS = " << value << "\n";
+         return value;
       } else {
          std::cout << "Bad value for MAX_LABEL_EXPANSIONS: " << getenv(MAX_LABEL_EXPANSIONS) << std::endl;
          exit(EXIT_FAILURE);
@@ -49,6 +50,7 @@ inline auto getEnvMaxLabelExpansionsTcg() noexcept -> int {
       int value = std::stoi(getenv(MAX_LABEL_EXPANSIONS_TCG));
       if (value > 0) {
          std::cout << "Read MAX_LABEL_EXPANSIONS_TCG = " << value << "\n";
+         return value;
       } else {
          std::cout << "Bad value for MAX_LABEL_EXPANSIONS_TCG: " << getenv(MAX_LABEL_EXPANSIONS_TCG) << std::endl;
          exit(EXIT_FAILURE);
