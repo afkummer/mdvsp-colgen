@@ -371,6 +371,11 @@ auto solveColumnGeneration(const CmdParm &parm, const Instance &inst) noexcept -
    }
    const auto totalTime = tm.elapsed();
 
+   // Forcibly converts the master problem to SP.
+   // This might be necessary for cases which the process was interrupted
+   // with a SIGINT, during the relaxed phase.
+   master->setAssignmentType('E');
+
    // Final solve to guarantee consistency.
    master->solve();
 
