@@ -8,101 +8,7 @@
 using namespace std;
 
 PricingCplex::PricingCplex(const Instance &inst, CgMasterBase &master, const int depotId, int maxPaths): CgPricingBase(inst, master, depotId, maxPaths) {
-   char buf[128];
-   const auto N = numNodes();
-   const auto O = sourceNode();
-   const auto D = sinkNode();
-
-   snprintf(buf, sizeof buf, "mdvsp_pricing_cplex#%d", m_depotId);
-   m_model = IloModel(m_env, buf);
-   m_cplex = IloCplex(m_model);
-
-   IloExpr expr{m_env};
-   m_x = IloArray<IloNumVarArray>(m_env, N);
-   for (int i = 0; i < N; ++i)
-      m_x[i] = IloNumVarArray(m_env, N);
-
-   #ifndef MIP_PRICING_LP
-      const auto VarTy = IloNumVar::Bool;
-   #else 
-      const auto VarTy = IloNumVar::Float;
-   #endif
-   for (int i = 0; i < m_inst->numTrips(); ++i) {
-      // Creates source arcs.
-      if (auto cost = m_inst->sourceCost(m_depotId, i); cost != -1) {
-         snprintf(buf, sizeof buf, "source#%d#%d", m_depotId, i);
-         m_x[O][i] = IloNumVar(m_env, 0.0, 1.0, VarTy, buf);
-         expr += cost * m_x[O][i];
-      }
-
-      // Creates sink arcs.
-      if (auto cost = m_inst->sinkCost(m_depotId, i); cost != -1) {
-         snprintf(buf, sizeof buf, "sink#%d#%d", m_depotId, i);
-         m_x[i][D] = IloNumVar(m_env, 0.0, 1.0, VarTy, buf);
-         expr += cost * m_x[i][D];
-      }
-
-      // Adds all deadheading arcs.
-      for (auto &p: m_inst->deadheadSuccAdj(i)) {
-         snprintf(buf, sizeof buf, "deadhead#%d#%d", i, p.first);
-         m_x[i][p.first] = IloNumVar(m_env, 0.0, 1.0, VarTy, buf);
-         expr += p.second * m_x[i][p.first];
-      }
-   }
-
-   m_obj = IloObjective(m_env, expr, IloObjective::Minimize, "shortest_path");
-   expr.clear();
-
-   // Adds the flow conservation constraints.
-   for (int i = 0; i < m_inst->numTrips(); ++i) {
-      if (auto col = m_x[O][i]; col.getImpl()) {
-         expr += col;
-      }
-
-      if (auto col = m_x[i][D]; col.getImpl()) {
-         expr -= col;
-      }
-
-      for (auto &p: m_inst->deadheadPredAdj(i)) {
-         assert(p.first != -1);
-         expr += m_x[p.first][i];
-      }
-
-      for (auto &p: m_inst->deadheadSuccAdj(i)) {
-         assert(p.first != -1);
-         expr -= m_x[i][p.first];
-      }
-
-      snprintf(buf, sizeof buf, "flow_consevation#%d", i);
-      IloConstraint c = expr == 0;
-      c.setName(buf);
-      m_model.add(c);
-      expr.clear();
-   }
-
-   // Optional constraint to force a single path.
-   if (maxPaths >= 1) {
-      for (int i = 0; i < m_inst->numTrips(); ++i) {
-         if (auto col = m_x[O][i]; col.getImpl()) {
-            expr += col;
-         }
-      }
-
-      snprintf(buf, sizeof buf, "max_paths#%d", m_depotId);
-      IloConstraint c = expr <= maxPaths;
-      c.setName(buf);
-      m_model.add(c);
-      expr.clear();
-   }
-
-   expr.end();
-
-   m_env.setOut(m_env.getNullStream());
-   m_env.setWarning(m_env.getNullStream());
-   m_cplex.setOut(m_env.getNullStream());
-   m_cplex.setWarning(m_env.getNullStream());
-
-   m_cplex.setParam(IloCplex::IntParam::Threads, 1);
+   // Empty
 }
 
 PricingCplex::~PricingCplex() {
@@ -122,6 +28,9 @@ auto PricingCplex::isExact() const noexcept -> bool {
 }
 
 auto PricingCplex::solve() noexcept -> double {
+   if (!m_cplex.getImpl())
+      buildModel();
+
    const auto N = m_inst->numTrips() + 2;
    const auto O = N - 2;
    const auto D = N - 1;
@@ -140,8 +49,8 @@ auto PricingCplex::solve() noexcept -> double {
 
       // Adds all deadheading arcs.
       for (auto &p: m_inst->deadheadSuccAdj(i)) {
-         assert(m_x[i][p.first].getImpl());
-         expr += (p.second - m_master->getTripDual(i)) * m_x[i][p.first];
+         if (m_x[i][p.first].getImpl())
+            expr += (p.second - m_master->getTripDual(i)) * m_x[i][p.first];
       }
    }
 
@@ -200,4 +109,104 @@ auto PricingCplex::findPathRecursive(std::vector<int> &path, double pcost, std::
          path.pop_back();
       }
    }
+}
+
+auto PricingCplex::buildModel() noexcept -> void {
+   char buf[128];
+   const auto N = numNodes();
+   const auto O = sourceNode();
+   const auto D = sinkNode();
+
+   snprintf(buf, sizeof buf, "mdvsp_pricing_cplex#%d", m_depotId);
+   m_model = IloModel(m_env, buf);
+   m_cplex = IloCplex(m_model);
+
+   IloExpr expr{m_env};
+   m_x = IloArray<IloNumVarArray>(m_env, N);
+   for (int i = 0; i < N; ++i)
+      m_x[i] = IloNumVarArray(m_env, N);
+
+   #ifndef MIP_PRICING_LP
+      const auto VarTy = IloNumVar::Bool;
+   #else 
+      const auto VarTy = IloNumVar::Float;
+   #endif
+   for (int i = 0; i < m_inst->numTrips(); ++i) {
+      // Creates source arcs.
+      if (auto cost = m_inst->sourceCost(m_depotId, i); cost != -1) {
+         snprintf(buf, sizeof buf, "source#%d#%d", m_depotId, i);
+         m_x[O][i] = IloNumVar(m_env, 0.0, 1.0, VarTy, buf);
+         expr += cost * m_x[O][i];
+      }
+
+      // Creates sink arcs.
+      if (auto cost = m_inst->sinkCost(m_depotId, i); cost != -1) {
+         snprintf(buf, sizeof buf, "sink#%d#%d", m_depotId, i);
+         m_x[i][D] = IloNumVar(m_env, 0.0, 1.0, VarTy, buf);
+         expr += cost * m_x[i][D];
+      }
+
+      // Adds all deadheading arcs, or up to the maximum number of arcs allowed to expand.
+      int numExpansions = m_maxLabelExpansions;
+      for (auto &p: m_inst->deadheadSuccAdj(i)) {
+         snprintf(buf, sizeof buf, "deadhead#%d#%d", i, p.first);
+         m_x[i][p.first] = IloNumVar(m_env, 0.0, 1.0, VarTy, buf);
+         expr += p.second * m_x[i][p.first];
+
+         if (--numExpansions == 0)
+               break;
+      }
+   }
+
+   m_obj = IloObjective(m_env, expr, IloObjective::Minimize, "shortest_path");
+   expr.clear();
+
+   // Adds the flow conservation constraints.
+   for (int i = 0; i < m_inst->numTrips(); ++i) {
+      if (auto col = m_x[O][i]; col.getImpl()) {
+         expr += col;
+      }
+
+      if (auto col = m_x[i][D]; col.getImpl()) {
+         expr -= col;
+      }
+
+      for (auto &p: m_inst->deadheadPredAdj(i)) {
+         if (m_x[p.first][i].getImpl())
+            expr += m_x[p.first][i];
+      }
+
+      for (auto &p: m_inst->deadheadSuccAdj(i)) {
+         if (m_x[i][p.first].getImpl())
+            expr -= m_x[i][p.first];
+      }
+
+      snprintf(buf, sizeof buf, "flow_consevation#%d", i);
+      IloConstraint c = expr == 0;
+      c.setName(buf);
+      m_model.add(c);
+      expr.clear();
+   }
+
+   // Optional constraint to force a single path.
+   if (m_maxPaths >= 1) {
+      for (int i = 0; i < m_inst->numTrips(); ++i) {
+         if (auto col = m_x[O][i]; col.getImpl()) {
+            expr += col;
+         }
+      }
+
+      snprintf(buf, sizeof buf, "max_paths#%d", m_depotId);
+      IloConstraint c = expr <= m_maxPaths;
+      c.setName(buf);
+      m_model.add(c);
+      expr.clear();
+   }
+
+   expr.end();
+
+   m_env.setOut(m_env.getNullStream());
+   m_env.setWarning(m_env.getNullStream());
+   m_cplex.setOut(m_env.getNullStream());
+   m_cplex.setWarning(m_env.getNullStream());
 }

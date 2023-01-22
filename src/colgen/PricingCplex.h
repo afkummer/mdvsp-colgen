@@ -26,4 +26,5 @@ private:
    IloArray<IloNumVarArray> m_x;
 
    auto findPathRecursive(std::vector<int> &path, double pcost, std::vector<std::vector<int>> &allPaths) const noexcept -> void;
+   auto buildModel() noexcept -> void;
 };
