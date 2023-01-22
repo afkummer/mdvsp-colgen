@@ -59,6 +59,7 @@ auto PricingBellman::solve() noexcept -> double {
       for (int i = 0; i < m_inst->numTrips(); ++i) {
          const auto iDual = m_master->getTripDual(i);
 
+         int numExpansions = m_maxLabelExpansions;
          for (auto &p: m_inst->deadheadSuccAdj(i)) {
             int to = p.first;
             double len = double(p.second) - iDual;
@@ -67,6 +68,9 @@ auto PricingBellman::solve() noexcept -> double {
                m_dist[to] = m_dist[i] + len;
                m_pred[to] = i;
                changed = true;
+
+               if (--numExpansions == 0)
+                  break;
             }
          }
 
